@@ -62,7 +62,8 @@ export default function Matchmaking() {
     setResult(null); // Clear previous result
     try {
       // Simulate API call for now or connect to backend
-      const res = await axios.post('http://localhost:8000/api/astronomy/match', {
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+      const res = await axios.post(`${baseUrl}/astronomy/match`, {
          boy: boyData,
          girl: girlData
       });

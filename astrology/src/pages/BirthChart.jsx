@@ -31,7 +31,8 @@ export default function BirthChart() {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await axios.post('http://localhost:8000/api/astronomy/chart', {
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+      const res = await axios.post(`${baseUrl}/astronomy/chart`, {
         ...formData,
         lat: parseFloat(formData.lat),
         lon: parseFloat(formData.lon)

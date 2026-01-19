@@ -9,13 +9,20 @@ import Interpretation from './pages/Interpretation';
 import { motion, AnimatePresence } from 'framer-motion';
 import CosmicParticles from './components/CosmicParticles';
 
-import { Menu, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Menu, X, LogOut } from 'lucide-react';
 import { useState } from 'react';
 
 function Navbar() {
   const { user, logout } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
+  
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
   
   // Hide Navbar on Home and Login pages
   if (location.pathname === '/' || location.pathname === '/login') return null;
@@ -35,13 +42,20 @@ function Navbar() {
             <Link to="/match" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">Matchmaking</Link>
             
             {user && (
-              <div className="flex items-center gap-3 pl-6 border-l border-white/10">
+              <div className="flex items-center gap-4 pl-6 border-l border-white/10">
                  <div className="text-right hidden sm:block">
                     <p className="text-sm font-bold text-white">{user.name}</p>
                  </div>
-                 <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold border-2 border-slate-900 shadow-lg cursor-pointer hover:scale-105 transition-transform" title="Logout" onClick={logout}>
+                 <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold border-2 border-slate-900 shadow-lg cursor-default">
                     {user.initials}
                  </div>
+                 <button 
+                    onClick={handleLogout}
+                    className="p-2 text-slate-400 hover:text-red-400 hover:bg-white/5 rounded-full transition-colors"
+                    title="Logout"
+                 >
+                    <LogOut size={20} />
+                 </button>
               </div>
             )}
           </div>
@@ -49,7 +63,7 @@ function Navbar() {
           {/* Mobile Menu Button */}
           <div className="md:hidden flex items-center gap-4">
              {user && (
-                 <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-bold border border-slate-900 shadow-lg" onClick={logout}>
+                 <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-bold border border-slate-900 shadow-lg">
                     {user.initials}
                  </div>
              )}
@@ -88,6 +102,12 @@ function Navbar() {
               >
                 Matchmaking
               </Link>
+              <button 
+                onClick={() => { handleLogout(); setIsOpen(false); }}
+                className="text-base font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 px-3 py-2 rounded-lg transition-colors flex items-center gap-2"
+              >
+                <LogOut size={18} /> Logout
+              </button>
            </div>
         </div>
       )}

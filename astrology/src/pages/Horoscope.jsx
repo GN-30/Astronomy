@@ -54,7 +54,8 @@ export default function Horoscope() {
 
     setLoading(true);
     try {
-        const res = await axios.post('http://localhost:8000/api/astrology/predict', {
+        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+        const res = await axios.post(`${baseUrl}/astrology/predict`, {
             rasi: selectedSign.name,
             nakshatra: "General",
             date: date
