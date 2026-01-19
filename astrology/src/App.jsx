@@ -6,7 +6,8 @@ import Horoscope from './pages/Horoscope';
 import BirthChart from './pages/BirthChart';
 import Matchmaking from './pages/Matchmaking';
 import Interpretation from './pages/Interpretation';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import CosmicParticles from './components/CosmicParticles';
 
 import { Menu, X } from 'lucide-react';
 import { useState } from 'react';
@@ -94,22 +95,6 @@ function Navbar() {
   );
 }
 
-function AnimatedRoutes() {
-    const location = useLocation();
-    return (
-        <div className="pt-20">
-             <Routes location={location} key={location.pathname}>
-                <Route path="/" element={<Home />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/horoscope" element={<RequireAuth><Horoscope /></RequireAuth>} />
-                <Route path="/chart" element={<RequireAuth><BirthChart /></RequireAuth>} />
-                <Route path="/match" element={<RequireAuth><Matchmaking /></RequireAuth>} />
-                <Route path="/interpretation" element={<RequireAuth><Interpretation /></RequireAuth>} />
-              </Routes>
-        </div>
-    );
-}
-
 function RequireAuth({ children }) {
     const { user, loading } = useAuth();
     if (loading) return null; // Or a spinner
@@ -121,7 +106,8 @@ export default function App() {
   return (
     <AuthProvider>
       <Router>
-        <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-purple-500 selection:text-white">
+        <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-purple-500 selection:text-white relative overflow-hidden">
+          <CosmicParticles />
           <Navbar />
           <RoutesWrapper />
         </div>
@@ -137,8 +123,9 @@ function RoutesWrapper() {
    const isCleanLayout = location.pathname === '/' || location.pathname === '/login';
    
    return (
-       <div className={isCleanLayout ? '' : 'pt-20'}>
-           <Routes>
+       <div className={isCleanLayout ? '' : 'pt-20 relative z-10'}>
+         <AnimatePresence mode="wait">
+           <Routes location={location} key={location.pathname}>
                 <Route path="/" element={<Home />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/horoscope" element={<RequireAuth><Horoscope /></RequireAuth>} />
@@ -146,6 +133,7 @@ function RoutesWrapper() {
                 <Route path="/match" element={<RequireAuth><Matchmaking /></RequireAuth>} />
                 <Route path="/interpretation" element={<RequireAuth><Interpretation /></RequireAuth>} />
            </Routes>
+         </AnimatePresence>
        </div>
    )
 }

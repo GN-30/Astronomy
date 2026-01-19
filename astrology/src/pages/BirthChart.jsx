@@ -5,6 +5,8 @@ import { MapPin, Calendar, Clock, RefreshCw, Download } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import bgImage from '../assets/birthchart_bg.png';
 import NorthIndianChart from '../components/NorthIndianChart';
+import PageTransition from '../components/PageTransition';
+import CosmicLoader from '../components/CosmicLoader';
 
 export default function BirthChart() {
   const [formData, setFormData] = useState({
@@ -69,156 +71,166 @@ export default function BirthChart() {
   };
 
   return (
-    <div 
-      className="min-h-screen py-10 px-4 pb-24 bg-cover bg-center bg-fixed"
-      style={{ backgroundImage: `url(${bgImage})` }}
-    >
-      <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-[2px] fixed pointer-events-none"></div>
-      <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 relative z-10">
-        
-        {/* Input Form */}
-        <div className="lg:col-span-1">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 sticky top-24">
-            <h2 className="text-2xl font-bold text-white mb-6">Birth Details</h2>
-            <form onSubmit={generateChart} className="space-y-4">
-              {/* ... inputs same ... */}
-              <div>
-                <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Date of Birth</label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-3 text-slate-500" size={16} />
-                  <input 
-                    type="date" name="dob" required
-                    value={formData.dob} onChange={handleChange}
-                    className="w-full bg-slate-800 border-slate-700 rounded-lg pl-10 py-2.5 text-white focus:ring-purple-500 focus:border-purple-500 cursor-pointer"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Time of Birth</label>
-                <div className="relative">
-                  <Clock className="absolute left-3 top-3 text-slate-500" size={16} />
-                  <input 
-                    type="time" name="time" required
-                    value={formData.time} onChange={handleChange}
-                    className="w-full bg-slate-800 border-slate-700 rounded-lg pl-10 py-2.5 text-white focus:ring-purple-500 focus:border-purple-500 cursor-pointer"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
+    <PageTransition>
+      <div 
+        className="min-h-screen py-10 px-4 pb-24 bg-cover bg-center bg-fixed"
+        style={{ backgroundImage: `url(${bgImage})` }}
+      >
+        <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-[2px] fixed pointer-events-none"></div>
+        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 relative z-10">
+          
+          {/* Input Form */}
+          <div className="lg:col-span-1">
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 sticky top-24">
+              <h2 className="text-2xl font-bold text-white mb-6">Birth Details</h2>
+              <form onSubmit={generateChart} className="space-y-4">
+                {/* ... inputs same ... */}
                 <div>
-                   <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Latitude</label>
-                   <input 
-                      type="number" step="any" name="lat" required
-                      value={formData.lat} onChange={handleChange}
-                      className="w-full bg-slate-800 border-slate-700 rounded-lg py-2.5 px-3 text-white focus:ring-purple-500 focus:border-purple-500"
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Date of Birth</label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-3 text-slate-500" size={16} />
+                    <input 
+                      type="date" name="dob" required
+                      value={formData.dob} onChange={handleChange}
+                      className="w-full bg-slate-800 border-slate-700 rounded-lg pl-10 py-2.5 text-white focus:ring-purple-500 focus:border-purple-500 cursor-pointer"
                     />
+                  </div>
                 </div>
-                <div>
-                   <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Longitude</label>
-                   <input 
-                      type="number" step="any" name="lon" required
-                      value={formData.lon} onChange={handleChange}
-                      className="w-full bg-slate-800 border-slate-700 rounded-lg py-2.5 px-3 text-white focus:ring-purple-500 focus:border-purple-500"
-                    />
-                </div>
-              </div>
 
-              <button 
-                type="submit" 
-                disabled={loading}
-                className="w-full mt-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3 rounded-lg shadow-lg shadow-purple-900/20 active:scale-95 transition-all cursor-pointer"
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Time of Birth</label>
+                  <div className="relative">
+                    <Clock className="absolute left-3 top-3 text-slate-500" size={16} />
+                    <input 
+                      type="time" name="time" required
+                      value={formData.time} onChange={handleChange}
+                      className="w-full bg-slate-800 border-slate-700 rounded-lg pl-10 py-2.5 text-white focus:ring-purple-500 focus:border-purple-500 cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Latitude</label>
+                    <input 
+                        type="number" step="any" name="lat" required
+                        value={formData.lat} onChange={handleChange}
+                        className="w-full bg-slate-800 border-slate-700 rounded-lg py-2.5 px-3 text-white focus:ring-purple-500 focus:border-purple-500"
+                      />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Longitude</label>
+                    <input 
+                        type="number" step="any" name="lon" required
+                        value={formData.lon} onChange={handleChange}
+                        className="w-full bg-slate-800 border-slate-700 rounded-lg py-2.5 px-3 text-white focus:ring-purple-500 focus:border-purple-500"
+                      />
+                  </div>
+                </div>
+
+                <button 
+                  type="submit" 
+                  disabled={loading}
+                  className="w-full mt-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3 rounded-lg shadow-lg shadow-purple-900/20 active:scale-95 transition-all cursor-pointer"
+                >
+                  {loading ? <RefreshCw className="animate-spin mx-auto" /> : "Generate Chart"}
+                </button>
+              </form>
+            </div>
+          </div>
+
+          {/* Chart Display */}
+          <div className="lg:col-span-2">
+            {loading ? (
+              <div className="h-full flex flex-col items-center justify-center min-h-[500px]">
+                  <CosmicLoader />
+              </div>
+            ) : chartData ? (
+              <motion.div 
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="space-y-6"
               >
-                {loading ? <RefreshCw className="animate-spin mx-auto" /> : "Generate Chart"}
-              </button>
-            </form>
+                
+                {/* Type Toggle */}
+                <div className="flex bg-slate-900/80 p-1 rounded-lg border border-slate-700 w-fit mx-auto">
+                  <button 
+                      onClick={() => setChartType('south')}
+                      className={`px-4 py-2 rounded-md text-sm font-bold transition-all cursor-pointer ${chartType === 'south' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                  >
+                      South Indian
+                  </button>
+                  <button 
+                      onClick={() => setChartType('north')}
+                      className={`px-4 py-2 rounded-md text-sm font-bold transition-all cursor-pointer ${chartType === 'north' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                  >
+                      North Indian
+                  </button>
+                </div>
+
+                {/* Capture Area */}
+                <div ref={chartRef} data-chart-container className="bg-slate-900 p-6 rounded-xl border border-slate-800">
+                    <div className="flex justify-between items-end mb-4">
+                        <div>
+                            <h3 className="text-xl font-bold text-white">Janma Kundli</h3>
+                            <p className="text-sm text-slate-400">{formData.dob} at {formData.time} ({chartType === 'south' ? 'South' : 'North'} Style)</p>
+                        </div>
+                    </div>
+                    
+                    {/* Main Chart Visualization */}
+                    <div className="bg-white rounded-lg p-4 shadow-xl aspect-square max-w-md mx-auto relative overflow-hidden text-black">
+                      {chartType === 'south' ? (
+                          <SouthIndianChart data={chartData} />
+                      ) : (
+                          <NorthIndianChart data={chartData} />
+                      )}
+                    </div>
+                </div>
+
+                {/* Download Button */}
+                <button 
+                  onClick={handleDownload}
+                  className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-lg border border-slate-700 flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                >
+                  <Download size={20} /> Download Chart Image
+                </button>
+                
+                {/* Planetary Table */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden mt-6">
+                  <table className="min-w-full divide-y divide-slate-800">
+                    <thead className="bg-slate-950">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Planet</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Longitude</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-slate-900 divide-y divide-slate-800">
+                      {chartData.planets.map((planet) => (
+                        <tr key={planet.name} className="hover:bg-slate-800/50 cursor-default">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{planet.name}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
+                            {Math.floor(planet.lon)}° {(planet.lon % 1 * 60).toFixed(0)}'
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
+                            {planet.is_retrograde ? <span className="text-red-400 font-bold">R</span> : <span className="text-green-400">D</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </motion.div>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-slate-500 border-2 border-dashed border-slate-800 rounded-xl min-h-[400px]">
+                <MapPin size={48} className="mb-4 opacity-50" />
+                <p>Enter birth details to generate the chart</p>
+              </div>
+            )}
           </div>
         </div>
-
-        {/* Chart Display */}
-        <div className="lg:col-span-2">
-          {chartData ? (
-            <div className="space-y-6">
-              
-              {/* Type Toggle */}
-              <div className="flex bg-slate-900/80 p-1 rounded-lg border border-slate-700 w-fit mx-auto">
-                 <button 
-                    onClick={() => setChartType('south')}
-                    className={`px-4 py-2 rounded-md text-sm font-bold transition-all cursor-pointer ${chartType === 'south' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
-                 >
-                    South Indian
-                 </button>
-                 <button 
-                    onClick={() => setChartType('north')}
-                    className={`px-4 py-2 rounded-md text-sm font-bold transition-all cursor-pointer ${chartType === 'north' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
-                 >
-                    North Indian
-                 </button>
-              </div>
-
-              {/* Capture Area */}
-              <div ref={chartRef} data-chart-container className="bg-slate-900 p-6 rounded-xl border border-slate-800">
-                  <div className="flex justify-between items-end mb-4">
-                      <div>
-                          <h3 className="text-xl font-bold text-white">Janma Kundli</h3>
-                          <p className="text-sm text-slate-400">{formData.dob} at {formData.time} ({chartType === 'south' ? 'South' : 'North'} Style)</p>
-                      </div>
-                  </div>
-                  
-                  {/* Main Chart Visualization */}
-                  <div className="bg-white rounded-lg p-4 shadow-xl aspect-square max-w-md mx-auto relative overflow-hidden text-black">
-                    {chartType === 'south' ? (
-                        <SouthIndianChart data={chartData} />
-                    ) : (
-                        <NorthIndianChart data={chartData} />
-                    )}
-                  </div>
-              </div>
-
-              {/* Download Button */}
-              <button 
-                onClick={handleDownload}
-                className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-lg border border-slate-700 flex items-center justify-center gap-2 cursor-pointer transition-colors"
-              >
-                <Download size={20} /> Download Chart Image
-              </button>
-              
-              {/* Planetary Table */}
-              <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden mt-6">
-                <table className="min-w-full divide-y divide-slate-800">
-                  <thead className="bg-slate-950">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Planet</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Longitude</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-slate-900 divide-y divide-slate-800">
-                    {chartData.planets.map((planet) => (
-                      <tr key={planet.name} className="hover:bg-slate-800/50 cursor-default">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{planet.name}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
-                          {Math.floor(planet.lon)}° {(planet.lon % 1 * 60).toFixed(0)}'
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
-                          {planet.is_retrograde ? <span className="text-red-400 font-bold">R</span> : <span className="text-green-400">D</span>}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ) : (
-            <div className="h-full flex flex-col items-center justify-center text-slate-500 border-2 border-dashed border-slate-800 rounded-xl min-h-[400px]">
-              <MapPin size={48} className="mb-4 opacity-50" />
-              <p>Enter birth details to generate the chart</p>
-            </div>
-          )}
-        </div>
       </div>
-    </div>
+    </PageTransition>
   );
 }
 
