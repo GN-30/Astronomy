@@ -3,6 +3,8 @@ import axios from 'axios';
 import { motion } from 'framer-motion';
 import { MapPin, Calendar, Clock, RefreshCw, Download } from 'lucide-react';
 import { toPng } from 'html-to-image';
+import bgImage from '../assets/birthchart_bg.png';
+import NorthIndianChart from '../components/NorthIndianChart';
 
 export default function BirthChart() {
   const [formData, setFormData] = useState({
@@ -15,10 +17,13 @@ export default function BirthChart() {
   const [chartData, setChartData] = useState(null);
   const [loading, setLoading] = useState(false);
   const chartRef = useRef(null);
+  const [chartType, setChartType] = useState('south'); // 'south' or 'north'
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
+  
+// ... (keep generateChart same)
 
   const generateChart = async (e) => {
     e.preventDefault();
@@ -48,11 +53,11 @@ export default function BirthChart() {
         const dataUrl = await toPng(chartRef.current, { 
             cacheBust: true, 
             backgroundColor: '#0f172a',
-            style: { transform: 'scale(1)' } // Ensure no scaling issues
+            style: { transform: 'scale(1)' } 
         });
         
         const link = document.createElement('a');
-        link.download = `birth-chart-${formData.dob || 'chart'}.png`;
+        link.download = `birth-chart-${chartType}-${formData.dob || 'chart'}.png`;
         link.href = dataUrl;
         document.body.appendChild(link);
         link.click();
@@ -64,14 +69,19 @@ export default function BirthChart() {
   };
 
   return (
-    <div className="min-h-screen py-10 px-4 bg-slate-950 pb-24">
-      <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <div 
+      className="min-h-screen py-10 px-4 pb-24 bg-cover bg-center bg-fixed"
+      style={{ backgroundImage: `url(${bgImage})` }}
+    >
+      <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-[2px] fixed pointer-events-none"></div>
+      <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 relative z-10">
         
         {/* Input Form */}
         <div className="lg:col-span-1">
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 sticky top-24">
             <h2 className="text-2xl font-bold text-white mb-6">Birth Details</h2>
             <form onSubmit={generateChart} className="space-y-4">
+              {/* ... inputs same ... */}
               <div>
                 <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Date of Birth</label>
                 <div className="relative">
@@ -131,18 +141,38 @@ export default function BirthChart() {
           {chartData ? (
             <div className="space-y-6">
               
+              {/* Type Toggle */}
+              <div className="flex bg-slate-900/80 p-1 rounded-lg border border-slate-700 w-fit mx-auto">
+                 <button 
+                    onClick={() => setChartType('south')}
+                    className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${chartType === 'south' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                 >
+                    South Indian
+                 </button>
+                 <button 
+                    onClick={() => setChartType('north')}
+                    className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${chartType === 'north' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                 >
+                    North Indian
+                 </button>
+              </div>
+
               {/* Capture Area */}
               <div ref={chartRef} data-chart-container className="bg-slate-900 p-6 rounded-xl border border-slate-800">
                   <div className="flex justify-between items-end mb-4">
                       <div>
                           <h3 className="text-xl font-bold text-white">Janma Kundli</h3>
-                          <p className="text-sm text-slate-400">{formData.dob} at {formData.time}</p>
+                          <p className="text-sm text-slate-400">{formData.dob} at {formData.time} ({chartType === 'south' ? 'South' : 'North'} Style)</p>
                       </div>
                   </div>
                   
                   {/* Main Chart Visualization */}
                   <div className="bg-white rounded-lg p-4 shadow-xl aspect-square max-w-md mx-auto relative overflow-hidden text-black">
-                    <SouthIndianChart data={chartData} />
+                    {chartType === 'south' ? (
+                        <SouthIndianChart data={chartData} />
+                    ) : (
+                        <NorthIndianChart data={chartData} />
+                    )}
                   </div>
               </div>
 

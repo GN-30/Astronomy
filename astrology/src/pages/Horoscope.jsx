@@ -3,6 +3,7 @@ import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, Calendar as CalendarIcon, Star, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import bgImage from '../assets/birthchart_bg.png';
 
 const ZODIAC_SIGNS = [
   // Fire
@@ -74,9 +75,9 @@ export default function Horoscope() {
   return (
     <div 
         className="min-h-screen bg-slate-950 text-white font-sans selection:bg-purple-500 pb-20 bg-cover bg-center bg-no-repeat bg-fixed"
-        style={{ backgroundImage: `url('/assets/horoscope_bg.png')` }}
+        style={{ backgroundImage: `url(${bgImage})` }}
     >
-      <div className="absolute inset-0 bg-slate-950/70 fixed pointer-events-none"></div>
+      <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-[2px] fixed pointer-events-none"></div>
 
       <div className="relative z-10">
       {view === 'detail' && (
