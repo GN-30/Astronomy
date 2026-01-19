@@ -52,7 +52,7 @@ def calculate_chart(data: BirthDetails):
         }
 
         swe.set_ephe_path('') 
-        flags = swe.FLG_MOSEPH | swe.FLG_SIDEREAL 
+        flags = swe.FLG_MOSEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED 
 
         chart_data = []
         rahu_data = None
@@ -70,7 +70,8 @@ def calculate_chart(data: BirthDetails):
             planet_info = {
                 "name": name,
                 "lon": lon,
-                "is_retrograde": is_retro
+                "is_retrograde": is_retro,
+                "speed": speed_lon
             }
             chart_data.append(planet_info)
             
@@ -87,17 +88,9 @@ def calculate_chart(data: BirthDetails):
             })
 
         # Calculate Houses (Sidereal)
-        # For South Indian Chart, usually Whole Sign (Rashis are fixed 30 deg sections)
-        # But we need the Ascendant (Lagna) precision.
-        # swe.houses returns tropical cusps usually unless we adjust? 
-        # Actually houses() function respects global sidereal mode if set? No, usually separate.
-        # But commonly in Vedic, we calculate Ascendant using Sidereal time.
-        
-        # We need to explicitly calculate Ascendant in Sidereal
-        # swe.houses returns [cusps], [ascmc]. 
-        # Note: swe.houses_ex allows flags.
-        
-        houses_res, ascmc = swe.houses_ex(jd, data.lat, data.lon, b'P', flags)
+        # Use Whole Sign (W) for Vedic Rasi Chart compatibility
+        h_sys = b'W'
+        houses_res, ascmc = swe.houses_ex(jd, data.lat, data.lon, h_sys, flags)
         ascendant = ascmc[0]
         
         houses = []
@@ -106,6 +99,11 @@ def calculate_chart(data: BirthDetails):
                 "house": i + 1,
                 "degree": cusp
             })
+            
+        # Debugging Print
+        print(f"Chart Calc: {data.dob} {data.time} (UTC: {dt_utc})")
+        for p in chart_data:
+            print(f"{p['name']}: {p['lon']:.2f} Speed: {p.get('speed', 0):.6f} Retro: {p['is_retrograde']}")
 
         return {
             "ascendant": ascendant,
@@ -114,7 +112,8 @@ def calculate_chart(data: BirthDetails):
             "meta": {
                 "julian_day": jd,
                 "ayanamsa": "Lahiri (Sidereal)",
-                "timezone": "IST assumed (-5:30)"
+                "timezone": "IST assumed (-5:30)",
+                "house_system": "Whole Sign"
             }
         }
 
