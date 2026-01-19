@@ -4,6 +4,7 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import Horoscope from './pages/Horoscope';
 import BirthChart from './pages/BirthChart';
+import Matchmaking from './pages/Matchmaking';
 import Interpretation from './pages/Interpretation';
 import { motion } from 'framer-motion';
 
@@ -30,6 +31,7 @@ function Navbar() {
           <div className="hidden md:flex items-center gap-6">
             <Link to="/horoscope" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">Horoscope</Link>
             <Link to="/chart" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">Birth Chart</Link>
+            <Link to="/match" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">Matchmaking</Link>
             
             {user && (
               <div className="flex items-center gap-3 pl-6 border-l border-white/10">
@@ -78,6 +80,13 @@ function Navbar() {
               >
                 Birth Chart
               </Link>
+              <Link 
+                to="/match" 
+                onClick={() => setIsOpen(false)}
+                className="text-base font-medium text-slate-300 hover:text-white hover:bg-white/5 px-3 py-2 rounded-lg transition-colors"
+              >
+                Matchmaking
+              </Link>
            </div>
         </div>
       )}
@@ -94,6 +103,7 @@ function AnimatedRoutes() {
                 <Route path="/login" element={<Login />} />
                 <Route path="/horoscope" element={<RequireAuth><Horoscope /></RequireAuth>} />
                 <Route path="/chart" element={<RequireAuth><BirthChart /></RequireAuth>} />
+                <Route path="/match" element={<RequireAuth><Matchmaking /></RequireAuth>} />
                 <Route path="/interpretation" element={<RequireAuth><Interpretation /></RequireAuth>} />
               </Routes>
         </div>
@@ -133,6 +143,7 @@ function RoutesWrapper() {
                 <Route path="/login" element={<Login />} />
                 <Route path="/horoscope" element={<RequireAuth><Horoscope /></RequireAuth>} />
                 <Route path="/chart" element={<RequireAuth><BirthChart /></RequireAuth>} />
+                <Route path="/match" element={<RequireAuth><Matchmaking /></RequireAuth>} />
                 <Route path="/interpretation" element={<RequireAuth><Interpretation /></RequireAuth>} />
            </Routes>
        </div>

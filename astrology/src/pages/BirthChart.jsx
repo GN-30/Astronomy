@@ -145,13 +145,13 @@ export default function BirthChart() {
               <div className="flex bg-slate-900/80 p-1 rounded-lg border border-slate-700 w-fit mx-auto">
                  <button 
                     onClick={() => setChartType('south')}
-                    className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${chartType === 'south' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                    className={`px-4 py-2 rounded-md text-sm font-bold transition-all cursor-pointer ${chartType === 'south' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
                  >
                     South Indian
                  </button>
                  <button 
                     onClick={() => setChartType('north')}
-                    className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${chartType === 'north' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                    className={`px-4 py-2 rounded-md text-sm font-bold transition-all cursor-pointer ${chartType === 'north' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
                  >
                     North Indian
                  </button>
