@@ -26,24 +26,17 @@ def calculate_chart(data: BirthDetails):
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid date/time format")
 
-        # Create localized datetime (assuming input is local time, usually we need timezone!)
-        # For MVP we might assume input is local and we need timezone from frontend or assume UTC?
-        # Standard practice: Request offsets or timezone string. 
-        # For now, let's treat input as System Local or require UTC? 
-        # Better: Accept simple input and maybe assume UTC or fixed offset?
-        # User prompt said: "Convert time -> UTC". 
-        # Let's assume the frontend sends Local Time and we need to handle it.
-        # But without timezone info from user, we can't accurately convert.
-        # I'll default to UTC for now to verify logic, or accept it as is.
+        # Handle Timezone: Assuming Input is Indian Standard Time (IST) -> UTC
+        # IST is UTC + 5:30. So UTC = IST - 5:30.
+        dt_ist = datetime.datetime(year, month, day, hour, minute)
+        dt_utc = dt_ist - datetime.timedelta(hours=5, minutes=30)
         
-        # Let's assume input is UTC for calculation simplicity or user provides offset?
-        # To keep it robust, I'll assume input is UTC.
-        
-        dt = datetime.datetime(year, month, day, hour, minute, tzinfo=pytz.UTC)
-        jd = get_julian_day(dt)
+        jd = get_julian_day(dt_utc)
+
+        # Set Sidereal Mode (Lahiri Ayanamsa for Vedic Astrology)
+        swe.set_sid_mode(swe.SIDM_LAHIRI)
 
         # Planets to calculate
-        # id: name
         planets_map = {
             swe.SUN: "Sun",
             swe.MOON: "Moon",
@@ -56,42 +49,55 @@ def calculate_chart(data: BirthDetails):
             swe.NEPTUNE: "Neptune",
             swe.PLUTO: "Pluto",
             swe.MEAN_NODE: "Rahu", # North Node
-            # Ketu is opposite Rahu
         }
 
-        swe.set_ephe_path('') # Use built-in or default path
+        swe.set_ephe_path('') 
+        flags = swe.FLG_MOSEPH | swe.FLG_SIDEREAL 
 
         chart_data = []
+        rahu_data = None
+
         for pid, name in planets_map.items():
-            # calculate position
-            # flags: swe.FLG_SWIEPH usually requires files, swe.FLG_MOSEPH is analytic (less precise but works without files)
-            # Default to MOSEPH for robustness if files are missing
-            res = swe.calc_ut(jd, pid, swe.FLG_MOSEPH)
-            # res is usually ( (lon, lat, dist, speed_lon, speed_lat, speed_dist), rflags )
-            
+            res = swe.calc_ut(jd, pid, flags)
             coords = res[0]
             lon = coords[0]
             speed_lon = coords[3]
             
-            # Simple House calculation to find which house it is in
-            # We need the Ascendant first
+            is_retro = speed_lon < 0
             
-            chart_data.append({
+            # Special logic for Nodes if needed, but usually Mean Node speed is negative
+            
+            planet_info = {
                 "name": name,
                 "lon": lon,
-                "is_retrograde": speed_lon < 0
+                "is_retrograde": is_retro
+            }
+            chart_data.append(planet_info)
+            
+            if name == "Rahu":
+                rahu_data = planet_info
+
+        # Calculate Ketu (Opposite to Rahu)
+        if rahu_data:
+            ketu_lon = (rahu_data["lon"] + 180.0) % 360.0
+            chart_data.append({
+                "name": "Ketu",
+                "lon": ketu_lon,
+                "is_retrograde": True # Nodes are always retrograde (Mean)
             })
 
-        # Calculate Houses & Ascendant
-        # swe.houses(jd, lat, lon, method)
-        # method: 'P' (Placidus), 'W' (Whole Sign), 'A' (Equal)
-        # South Indian usually uses Whole Sign or Equal? Let's use 'P' for standard western/modern or 'W' better?
-        # 'P' is default for most
-        h_sys = b'P'
-        houses_res, ascmc = swe.houses(jd, data.lat, data.lon, h_sys)
-        # houses_res is list of 12 cusps (start of house)
-        # ascmc = [Ascendant, MC, ARMC, Vertex, Eq_Asc, Co_Asc, Moon_Cross, Polar_Asc]
+        # Calculate Houses (Sidereal)
+        # For South Indian Chart, usually Whole Sign (Rashis are fixed 30 deg sections)
+        # But we need the Ascendant (Lagna) precision.
+        # swe.houses returns tropical cusps usually unless we adjust? 
+        # Actually houses() function respects global sidereal mode if set? No, usually separate.
+        # But commonly in Vedic, we calculate Ascendant using Sidereal time.
         
+        # We need to explicitly calculate Ascendant in Sidereal
+        # swe.houses returns [cusps], [ascmc]. 
+        # Note: swe.houses_ex allows flags.
+        
+        houses_res, ascmc = swe.houses_ex(jd, data.lat, data.lon, b'P', flags)
         ascendant = ascmc[0]
         
         houses = []
@@ -107,7 +113,8 @@ def calculate_chart(data: BirthDetails):
             "houses": houses,
             "meta": {
                 "julian_day": jd,
-                "method": "Moshier (No ephemeris files)"
+                "ayanamsa": "Lahiri (Sidereal)",
+                "timezone": "IST assumed (-5:30)"
             }
         }
 
