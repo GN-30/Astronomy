@@ -6,6 +6,7 @@ import Horoscope from './pages/Horoscope';
 import BirthChart from './pages/BirthChart';
 import Matchmaking from './pages/Matchmaking';
 import Interpretation from './pages/Interpretation';
+import ChartAnalysis from './pages/ChartAnalysis';
 import { motion, AnimatePresence } from 'framer-motion';
 import CosmicParticles from './components/CosmicParticles';
 
@@ -39,6 +40,7 @@ function Navbar() {
           <div className="hidden md:flex items-center gap-6">
             <Link to="/horoscope" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">Horoscope</Link>
             <Link to="/chart" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">Birth Chart</Link>
+            <Link to="/analysis" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">Analysis</Link>
             <Link to="/match" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">Matchmaking</Link>
             
             {user && (
@@ -102,6 +104,13 @@ function Navbar() {
               >
                 Matchmaking
               </Link>
+              <Link 
+                to="/analysis" 
+                onClick={() => setIsOpen(false)}
+                className="text-base font-medium text-slate-300 hover:text-white hover:bg-white/5 px-3 py-2 rounded-lg transition-colors"
+              >
+                Analysis
+              </Link>
               <button 
                 onClick={() => { handleLogout(); setIsOpen(false); }}
                 className="text-base font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 px-3 py-2 rounded-lg transition-colors flex items-center gap-2"
@@ -151,6 +160,7 @@ function RoutesWrapper() {
                 <Route path="/horoscope" element={<RequireAuth><Horoscope /></RequireAuth>} />
                 <Route path="/chart" element={<RequireAuth><BirthChart /></RequireAuth>} />
                 <Route path="/match" element={<RequireAuth><Matchmaking /></RequireAuth>} />
+                <Route path="/analysis" element={<RequireAuth><ChartAnalysis /></RequireAuth>} />
                 <Route path="/interpretation" element={<RequireAuth><Interpretation /></RequireAuth>} />
            </Routes>
          </AnimatePresence>
