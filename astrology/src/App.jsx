@@ -9,6 +9,7 @@ import Interpretation from './pages/Interpretation';
 import ChartAnalysis from './pages/ChartAnalysis';
 import { motion, AnimatePresence } from 'framer-motion';
 import CosmicParticles from './components/CosmicParticles';
+import InstallPrompt from './components/InstallPrompt';
 
 import { useNavigate } from 'react-router-dom';
 import { Menu, X, LogOut } from 'lucide-react';
@@ -138,6 +139,7 @@ export default function App() {
         <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-purple-500 selection:text-white relative overflow-hidden">
           <CosmicParticles />
           <Navbar />
+          <InstallPrompt />
           <RoutesWrapper />
         </div>
       </Router>
