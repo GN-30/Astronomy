@@ -66,11 +66,11 @@ export const getTamilDate = (dateString) => {
   // A clean, readable approach:
   const checkDate = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
   
-  // Transition dates for the current Gregorian year
+  // Transition dates for the current Gregorian year (Adjusted +1 day to match exact solar dates for the year)
   const transitions = [
-    { tamilIndex: 9, date: new Date(year, 0, 15) },   // Thai starts Jan 15
+    { tamilIndex: 9, date: new Date(year, 0, 15) },   // Thai starts Jan 15 (Usually 14 or 15)
     { tamilIndex: 10, date: new Date(year, 1, 13) },  // Masi starts Feb 13
-    { tamilIndex: 11, date: new Date(year, 2, 14) },  // Panguni starts Mar 14
+    { tamilIndex: 11, date: new Date(year, 2, 15) },  // Panguni starts Mar 15
     { tamilIndex: 0, date: new Date(year, 3, 14) },   // Chithirai starts Apr 14
     { tamilIndex: 1, date: new Date(year, 4, 15) },   // Vaikasi starts May 15
     { tamilIndex: 2, date: new Date(year, 5, 15) },   // Aani starts Jun 15
