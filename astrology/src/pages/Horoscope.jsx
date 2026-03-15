@@ -6,27 +6,28 @@ import { useAuth } from '../context/AuthContext';
 import bgImage from '../assets/birthchart_bg.png';
 import PageTransition from '../components/PageTransition';
 import CosmicLoader from '../components/CosmicLoader';
+import { getTamilDate } from '../utils/tamilCalendar';
 
 const ZODIAC_SIGNS = [
   // Fire
-  { name: "Aries", dates: "Mar 21 - Apr 19", element: "Fire", img: "/assets/aries.png", type: "single" },
-  { name: "Leo", dates: "Jul 23 - Aug 22", element: "Fire", img: "/assets/leo.png", type: "single" },
-  { name: "Sagittarius", dates: "Nov 22 - Dec 21", element: "Fire", img: "/assets/sagittarius.png", type: "single" },
+  { name: "Aries", dates: "Panguni 21 - Chithirai 19", element: "Fire", img: "/assets/aries.png", type: "single" },
+  { name: "Leo", dates: "Aadi 23 - Aavani 22", element: "Fire", img: "/assets/leo.png", type: "single" },
+  { name: "Sagittarius", dates: "Karthigai 22 - Margazhi 21", element: "Fire", img: "/assets/sagittarius.png", type: "single" },
   
   // Earth
-  { name: "Taurus", dates: "Apr 20 - May 20", element: "Earth", img: "/assets/taurus.png", type: "single" },
-  { name: "Virgo", dates: "Aug 23 - Sep 22", element: "Earth", img: "/assets/virgo.png", type: "single" },
-  { name: "Capricorn", dates: "Dec 22 - Jan 19", element: "Earth", img: "/assets/capricorn.png", type: "single" },
+  { name: "Taurus", dates: "Chithirai 20 - Vaikasi 20", element: "Earth", img: "/assets/taurus.png", type: "single" },
+  { name: "Virgo", dates: "Aavani 23 - Purattasi 22", element: "Earth", img: "/assets/virgo.png", type: "single" },
+  { name: "Capricorn", dates: "Margazhi 22 - Thai 19", element: "Earth", img: "/assets/capricorn.png", type: "single" },
 
   // Air
-  { name: "Gemini", dates: "May 21 - Jun 20", element: "Air", img: "/assets/gemini.png", type: "single" },
-  { name: "Libra", dates: "Sep 23 - Oct 22", element: "Air", img: "/assets/libra.png", type: "single" },
-  { name: "Aquarius", dates: "Jan 20 - Feb 18", element: "Air", img: "/assets/aquarius.png", type: "single" },
+  { name: "Gemini", dates: "Vaikasi 21 - Aani 20", element: "Air", img: "/assets/gemini.png", type: "single" },
+  { name: "Libra", dates: "Purattasi 23 - Aippasi 22", element: "Air", img: "/assets/libra.png", type: "single" },
+  { name: "Aquarius", dates: "Thai 20 - Masi 18", element: "Air", img: "/assets/aquarius.png", type: "single" },
 
   // Water
-  { name: "Cancer", dates: "Jun 21 - Jul 22", element: "Water", img: "/assets/cancer.png", type: "single" },
-  { name: "Scorpio", dates: "Oct 23 - Nov 21", element: "Water", img: "/assets/scorpio.png", type: "single" },
-  { name: "Pisces", dates: "Feb 19 - Mar 20", element: "Water", img: "/assets/pisces.png", type: "single" },
+  { name: "Cancer", dates: "Aani 21 - Aadi 22", element: "Water", img: "/assets/cancer.png", type: "single" },
+  { name: "Scorpio", dates: "Aippasi 23 - Karthigai 21", element: "Water", img: "/assets/scorpio.png", type: "single" },
+  { name: "Pisces", dates: "Masi 19 - Panguni 20", element: "Water", img: "/assets/pisces.png", type: "single" },
 ];
 
 export default function Horoscope() {
@@ -36,6 +37,7 @@ export default function Horoscope() {
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState('grid'); // 'grid' or 'detail'
   const [selectedDate, setSelectedDate] = useState('');
+  const [tamilDateStr, setTamilDateStr] = useState(null);
   const [error, setError] = useState(null);
 
   const handleSignClick = (sign) => {
@@ -43,12 +45,21 @@ export default function Horoscope() {
     setView('detail');
     setPrediction(null);
     setSelectedDate('');
+    setTamilDateStr(null);
     setError(null);
   };
 
   const handleDateChange = async (e) => {
     const date = e.target.value;
     setSelectedDate(date);
+    
+    if (date) {
+      const tDate = getTamilDate(date);
+      setTamilDateStr(tDate ? `${tDate.month} ${tDate.day}, ${new Date(date).getFullYear()}` : null);
+    } else {
+      setTamilDateStr(null);
+    }
+
     setError(null);
     if (!date) return;
 
@@ -73,6 +84,7 @@ export default function Horoscope() {
     setView('grid');
     setPrediction(null);
     setSelectedDate('');
+    setTamilDateStr(null);
   };
 
   return (
@@ -169,6 +181,23 @@ export default function Horoscope() {
                             />
                             <CalendarIcon className="absolute left-4 top-4 text-purple-400" size={24}/>
                         </div>
+
+                        {/* Tamil Date Display */}
+                        <AnimatePresence>
+                            {tamilDateStr && (
+                                <motion.div 
+                                    initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                                    animate={{ opacity: 1, height: 'auto', marginTop: -8 }}
+                                    exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                                    className="mb-8 flex justify-center overflow-hidden"
+                                >
+                                    <div className="bg-purple-900/40 text-purple-200 text-sm font-medium px-4 py-2 rounded-lg border border-purple-500/30 flex items-center gap-2 shadow-lg shadow-purple-500/10">
+                                        <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse"></span>
+                                        {tamilDateStr}
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
 
                         {loading ? (
                              <div className="h-full flex flex-col items-center justify-center py-10">
