@@ -10,24 +10,24 @@ import { getTamilDate } from '../utils/tamilCalendar';
 
 const ZODIAC_SIGNS = [
   // Fire
-  { name: "Aries", dates: "Panguni 21 - Chithirai 19", element: "Fire", img: "/assets/aries.png", type: "single" },
-  { name: "Leo", dates: "Aadi 23 - Aavani 22", element: "Fire", img: "/assets/leo.png", type: "single" },
-  { name: "Sagittarius", dates: "Karthigai 22 - Margazhi 21", element: "Fire", img: "/assets/sagittarius.png", type: "single" },
+  { name: "Aries", tamilName: "Mesham", dates: "Aswini, Bharani, Krithika", element: "Fire", img: "/assets/aries.png", type: "single" },
+  { name: "Leo", tamilName: "Simmam", dates: "Magha, Purva Phalguni, Uttara Phalguni", element: "Fire", img: "/assets/leo.png", type: "single" },
+  { name: "Sagittarius", tamilName: "Dhanusu", dates: "Moola, Purvashada, Uttarashada", element: "Fire", img: "/assets/sagittarius.png", type: "single" },
   
   // Earth
-  { name: "Taurus", dates: "Chithirai 20 - Vaikasi 20", element: "Earth", img: "/assets/taurus.png", type: "single" },
-  { name: "Virgo", dates: "Aavani 23 - Purattasi 22", element: "Earth", img: "/assets/virgo.png", type: "single" },
-  { name: "Capricorn", dates: "Margazhi 22 - Thai 19", element: "Earth", img: "/assets/capricorn.png", type: "single" },
+  { name: "Taurus", tamilName: "Rishabam", dates: "Krithika, Rohini, Mrigashira", element: "Earth", img: "/assets/taurus.png", type: "single" },
+  { name: "Virgo", tamilName: "Kanni", dates: "Uttara Phalguni, Hasta, Chitra", element: "Earth", img: "/assets/virgo.png", type: "single" },
+  { name: "Capricorn", tamilName: "Makaram", dates: "Uttarashada, Shravana, Dhanishta", element: "Earth", img: "/assets/capricorn.png", type: "single" },
 
   // Air
-  { name: "Gemini", dates: "Vaikasi 21 - Aani 20", element: "Air", img: "/assets/gemini.png", type: "single" },
-  { name: "Libra", dates: "Purattasi 23 - Aippasi 22", element: "Air", img: "/assets/libra.png", type: "single" },
-  { name: "Aquarius", dates: "Thai 20 - Masi 18", element: "Air", img: "/assets/aquarius.png", type: "single" },
+  { name: "Gemini", tamilName: "Mithunam", dates: "Mrigashira, Ardra, Punarvasu", element: "Air", img: "/assets/gemini.png", type: "single" },
+  { name: "Libra", tamilName: "Thulam", dates: "Chitra, Swati, Vishakha", element: "Air", img: "/assets/libra.png", type: "single" },
+  { name: "Aquarius", tamilName: "Kumbam", dates: "Dhanishta, Shatabhisha, Purva Bhadrapada", element: "Air", img: "/assets/aquarius.png", type: "single" },
 
   // Water
-  { name: "Cancer", dates: "Aani 21 - Aadi 22", element: "Water", img: "/assets/cancer.png", type: "single" },
-  { name: "Scorpio", dates: "Aippasi 23 - Karthigai 21", element: "Water", img: "/assets/scorpio.png", type: "single" },
-  { name: "Pisces", dates: "Masi 19 - Panguni 20", element: "Water", img: "/assets/pisces.png", type: "single" },
+  { name: "Cancer", tamilName: "Kadagam", dates: "Punarvasu, Pushya, Ashlesha", element: "Water", img: "/assets/cancer.png", type: "single" },
+  { name: "Scorpio", tamilName: "Viruchigam", dates: "Vishakha, Anuradha, Jyeshtha", element: "Water", img: "/assets/scorpio.png", type: "single" },
+  { name: "Pisces", tamilName: "Meenam", dates: "Purva Bhadrapada, Uttara Bhadra, Revati", element: "Water", img: "/assets/pisces.png", type: "single" },
 ];
 
 export default function Horoscope() {
@@ -133,9 +133,14 @@ export default function Horoscope() {
                                 />
                             </div>
 
-                            <span className={`text-sm font-medium transition-colors ${sign.name === 'Scorpio' ? 'text-purple-300 group-hover:text-purple-200' : 'text-slate-300 group-hover:text-white'}`}>
-                                {sign.name}
-                            </span>
+                            <div className="flex flex-col items-center gap-1">
+                                <span className={`text-sm font-medium transition-colors ${sign.name === 'Scorpio' ? 'text-purple-300 group-hover:text-purple-200' : 'text-slate-300 group-hover:text-white'}`}>
+                                    {sign.name}
+                                </span>
+                                <span className="text-xs font-light text-purple-400 opacity-80 group-hover:opacity-100 transition-opacity">
+                                    {sign.tamilName}
+                                </span>
+                            </div>
                         </motion.button>
                     ))}
                 </div>
@@ -158,7 +163,9 @@ export default function Horoscope() {
                                 alt={selectedSign.name}
                             />
                         </div>
-                        <h2 className="text-4xl font-bold text-white tracking-wide">{selectedSign.name}</h2>
+                        <h2 className="text-4xl font-bold text-white tracking-wide">
+                            {selectedSign.name} <span className="text-2xl font-light text-purple-400">({selectedSign.tamilName})</span>
+                        </h2>
                         <p className="text-purple-300 mt-2 font-medium">{selectedSign.dates}</p>
                     </div>
 
