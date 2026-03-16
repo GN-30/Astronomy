@@ -17,6 +17,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 router = APIRouter(prefix="/api/astronomy", tags=["Astronomy"])
 
 class BirthDetails(BaseModel):
+    name: str = ""
     dob: str  # YYYY-MM-DD
     time: str # HH:MM
     place: str
@@ -139,38 +140,76 @@ def calculate_chart(data: BirthDetails):
         nakshatra_num = moon_lon / nakshatra_len
         nakshatra_idx = int(math.floor(nakshatra_num))
         
-        # E.g., Ashwini is 0. Lord is Ketu (index 0). 
-        # Bharani is 1. Lord is Venus (index 1).
         lord_idx = nakshatra_idx % 9
         
         fraction_left = 1.0 - (nakshatra_num - nakshatra_idx)
-        years_left_first_dasha = fraction_left * dasha_years[lord_idx]
+        fraction_elapsed = 1.0 - fraction_left
+        years_elapsed_first_dasha = fraction_elapsed * dasha_years[lord_idx]
+        days_elapsed = years_elapsed_first_dasha * 365.2425
         
+        dob_date = dt_ist
+        true_start_date = dt_ist - datetime.timedelta(days=days_elapsed)
+        
+        def generate_sub_dashas(start_idx, current_start_date, curr_duration, level, max_level=5):
+            if level >= max_level:
+                return []
+            sub_dashas = []
+            sd = current_start_date
+            for j in range(9):
+                sub_idx = (start_idx + j) % 9
+                sub_lord = dasha_lords[sub_idx]
+                sub_duration = curr_duration * (dasha_years[sub_idx] / 120.0)
+                sub_days = sub_duration * 365.2425
+                sub_end_date = sd + datetime.timedelta(days=sub_days)
+                
+                # Skip any sub-dasha that ended before the individual was born
+                if sub_end_date <= dob_date:
+                    sd = sub_end_date
+                    continue
+                
+                # Truncate the display start to the Date of Birth if it overlaps
+                display_start = sd if sd > dob_date else dob_date
+                display_duration = (sub_end_date - display_start).total_seconds() / (365.2425 * 24 * 3600)
+                
+                sub_dasha_data = {
+                    "lord": sub_lord,
+                    "start": display_start.strftime("%Y-%m-%d"),
+                    "end": sub_end_date.strftime("%Y-%m-%d"),
+                    "duration_years": round(display_duration, 4),
+                    # Pass the TRUE start date `sd` down so the math stays aligned
+                    "sub_levels": generate_sub_dashas(sub_idx, sd, sub_duration, level + 1, max_level)
+                }
+                sub_dashas.append(sub_dasha_data)
+                sd = sub_end_date
+            return sub_dashas
+
         dashas = []
-        current_date = dt_ist
-        start_date = current_date
-        
-        # Calculate for 120 years
+        sd = true_start_date
+
+        # Calculate for 120 years (9 Mahadashas)
         for i in range(9):
             idx = (lord_idx + i) % 9
             lord = dasha_lords[idx]
-            
-            if i == 0:
-                duration_years = years_left_first_dasha
-            else:
-                duration_years = dasha_years[idx]
-            
+            duration_years = dasha_years[idx]
             days = duration_years * 365.2425
-            end_date = start_date + datetime.timedelta(days=days)
+            end_date = sd + datetime.timedelta(days=days)
+            
+            if end_date <= dob_date:
+                sd = end_date
+                continue
+                
+            display_start = sd if sd > dob_date else dob_date
+            display_duration = (end_date - display_start).total_seconds() / (365.2425 * 24 * 3600)
             
             dashas.append({
                 "lord": lord,
-                "start": start_date.strftime("%Y-%m-%d"),
+                "start": display_start.strftime("%Y-%m-%d"),
                 "end": end_date.strftime("%Y-%m-%d"),
-                "duration_years": round(duration_years, 2)
+                "duration_years": round(display_duration, 2),
+                "sub_levels": generate_sub_dashas(idx, sd, duration_years, 1, 5)
             })
             
-            start_date = end_date
+            sd = end_date
             
         # Debugging Print
         print(f"Chart Calc: {data.dob} {data.time} (UTC: {dt_utc})")

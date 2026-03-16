@@ -3,6 +3,8 @@ import axios from 'axios';
 import { motion } from 'framer-motion';
 import { MapPin, Calendar, Clock, RefreshCw, Download, Navigation, Search } from 'lucide-react';
 import { toPng } from 'html-to-image';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas-pro';
 import bgImage from '../assets/birthchart_bg.png';
 import NorthIndianChart from '../components/NorthIndianChart';
 import PageTransition from '../components/PageTransition';
@@ -10,6 +12,7 @@ import CosmicLoader from '../components/CosmicLoader';
 
 export default function BirthChart() {
   const [formData, setFormData] = useState({
+    name: '',
     dob: '',
     time: '',
     place: 'Chennai',
@@ -18,9 +21,12 @@ export default function BirthChart() {
   });
   const [chartData, setChartData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const chartRef = useRef(null);
+  const downloadContainerRef = useRef(null);
   const [chartType, setChartType] = useState('south'); // 'south' or 'north'
   const [activeChart, setActiveChart] = useState('rasi'); // 'rasi' or 'navamsa'
+  const [expandedDashaPath, setExpandedDashaPath] = useState('');
 
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -122,27 +128,78 @@ export default function BirthChart() {
   };
 
   const handleDownload = async () => {
-    if (!chartRef.current) {
-        alert("Chart not found. Please regenerate.");
+    if (!downloadContainerRef.current) {
+        alert("Preparing chart for download... Please try clicking again in a moment.");
         return;
     }
     
+    // We must give the browser enough time to paint the newly visible container
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
     try {
-        const dataUrl = await toPng(chartRef.current, { 
-            cacheBust: true, 
+        const pdf = new jsPDF({
+            orientation: 'portrait',
+            unit: 'px',
+            format: 'a4'
+        });
+
+        // Use custom specific dimensions for A4
+        const a4Width = pdf.internal.pageSize.getWidth();
+        const a4Height = pdf.internal.pageSize.getHeight();
+
+        // 1. Capture Page 1: The Charts
+        const page1El = document.getElementById('pdf-page-1');
+        const imgData1 = await toPng(page1El, { 
             backgroundColor: '#0f172a',
-            style: { transform: 'scale(1)' } 
+            quality: 1
         });
         
-        const link = document.createElement('a');
-        link.download = `birth-chart-${chartType}-${formData.dob || 'chart'}.png`;
-        link.href = dataUrl;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        if (!imgData1 || imgData1 === 'data:,') {
+             throw new Error("Failed to render the Charts page (Browser returned empty capture)");
+        }
+        
+        const imgProps1 = pdf.getImageProperties(imgData1);
+        const pdfHeight1 = (imgProps1.height * a4Width) / imgProps1.width;
+        
+        pdf.addImage(imgData1, 'PNG', 0, 0, a4Width, pdfHeight1);
+
+        // 2. Capture Page 2: The entire Dasha Tree (Expanded)
+        const page2El = document.getElementById('pdf-page-2');
+        const imgData2 = await toPng(page2El, { 
+            backgroundColor: '#0f172a',
+            quality: 1
+        });
+        
+        if (!imgData2 || imgData2 === 'data:,') {
+             throw new Error("Failed to render the Dashas page (Browser returned empty capture)");
+        }
+        
+        const imgProps2 = pdf.getImageProperties(imgData2);
+        const pdfHeight2 = (imgProps2.height * a4Width) / imgProps2.width;
+        
+        // Ensure Page 2 might span multiple PDF pages if wildly long, but we'll print it on its own page
+        pdf.addPage();
+        
+        // Simple pagination for highly nested tables
+        let position = 0;
+        let leftHeight = pdfHeight2;
+
+        while (leftHeight > 0) {
+            pdf.addImage(imgData2, 'PNG', 0, position, a4Width, pdfHeight2);
+            leftHeight -= a4Height;
+            position -= a4Height;
+            if (leftHeight > 0) {
+                pdf.addPage();
+            }
+        }
+        
+        pdf.save(`Full-Vedic-Astrology-Report-${formData.name || 'Chart'}.pdf`);
+        
     } catch (err) {
         console.error("Download failed:", err);
         alert(`Download failed: ${err.message}`);
+    } finally {
+        setIsDownloading(false);
     }
   };
 
@@ -160,6 +217,18 @@ export default function BirthChart() {
             <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 sticky top-24">
               <h2 className="text-2xl font-bold text-white mb-6">Birth Details</h2>
               <form onSubmit={generateChart} className="space-y-4">
+                <div className="relative">
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Name</label>
+                  <div className="relative">
+                    <input 
+                      type="text" name="name" required autoComplete="off"
+                      value={formData.name} onChange={handleChange}
+                      placeholder="Enter full name"
+                      className="w-full bg-slate-800 border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-purple-500 focus:border-purple-500"
+                    />
+                  </div>
+                </div>
+
                 <div className="relative">
                   <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Place of Birth</label>
                   <div className="flex gap-2 relative">
@@ -295,7 +364,7 @@ export default function BirthChart() {
                     <div className="flex justify-between items-end mb-4">
                         <div>
                             <h3 className="text-xl font-bold text-white">
-                                {activeChart === 'rasi' ? 'Janma Kundli (Rasi - D1)' : 'Navamsa Chart (D9)'}
+                                {formData.name ? `${formData.name}'s ` : ''}{activeChart === 'rasi' ? 'Janma Kundli (Rasi - D1)' : 'Navamsa Chart (D9)'}
                             </h3>
                             <p className="text-sm text-slate-400">{formData.dob} at {formData.time} ({chartType === 'south' ? 'South' : 'North'} Style)</p>
                         </div>
@@ -318,10 +387,16 @@ export default function BirthChart() {
 
                 {/* Download Button */}
                 <button 
-                  onClick={handleDownload}
+                  onClick={() => {
+                      setIsDownloading(true);
+                      // Trigger the actual download logic after a tiny delay so React mounts the hidden container
+                      setTimeout(handleDownload, 100); 
+                  }}
+                  disabled={isDownloading}
                   className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-lg border border-slate-700 flex items-center justify-center gap-2 cursor-pointer transition-colors"
                 >
-                  <Download size={20} /> Download Chart Image
+                  {isDownloading ? <RefreshCw className="animate-spin" size={20} /> : <Download size={20} />} 
+                  {isDownloading ? "Generating Multi-Page PDF..." : "Download Full PDF Report"}
                 </button>
                 
                 {/* Planetary Table */}
@@ -353,34 +428,133 @@ export default function BirthChart() {
                 {/* Vimshottari Dasha Table */}
                 {chartData.dashas && (
                   <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden mt-6">
-                    <div className="bg-slate-950 px-6 py-4 border-b border-slate-800">
-                      <h3 className="text-lg font-bold text-white">Vimshottari Dasha (Mahadasha)</h3>
-                      <p className="text-xs text-slate-400">120 Year Cycle mapped from birth time</p>
+                    <div className="bg-slate-950 px-6 py-4 border-b border-slate-800 flex justify-between items-center sm:flex-row flex-col gap-2">
+                      <div>
+                        <h3 className="text-lg font-bold text-white">Vimshottari Dasha Periods</h3>
+                        <p className="text-xs text-slate-400">120 Year Cycle mapped from birth time</p>
+                      </div>
+                      <div className="text-[10px] text-slate-500 flex gap-2">
+                         <span>Mahadasha</span>
+                         <span>• Bhukti</span>
+                         <span>• Pratyantar</span>
+                         <span>• Sookshma</span>
+                         <span>• Praana</span>
+                      </div>
                     </div>
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-slate-800">
-                        <thead className="bg-slate-950/50">
-                          <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Dasha Lord</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Start Date</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">End Date</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Duration</th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-slate-900 divide-y divide-slate-800">
-                          {chartData.dashas.map((dasha, idx) => (
-                            <tr key={`${dasha.lord}-${idx}`} className="hover:bg-slate-800/50 cursor-default">
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-indigo-400">{dasha.lord}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{dasha.start}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{dasha.end}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">{dasha.duration_years} Years</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                    <div className="w-full overflow-x-auto">
+                        <div className="min-w-[500px]">
+                            <div className="flex items-center justify-between p-3 bg-slate-950/50 text-xs font-medium text-slate-400 uppercase tracking-wider border-b border-slate-800">
+                               <div className="w-1/3 pl-10">Dasha Lord</div>
+                               <div className="w-1/4">Start Date</div>
+                               <div className="w-1/4">End Date</div>
+                               <div className="w-1/6 text-right pr-4">Duration</div>
+                            </div>
+                            <div className="flex flex-col">
+                               {chartData.dashas.map((dasha, idx) => (
+                                 <DashaNode 
+                                    key={`dasha-${idx}`} 
+                                    dasha={dasha} 
+                                    level={1} 
+                                    expandedPath={expandedDashaPath} 
+                                    setExpandedPath={setExpandedDashaPath} 
+                                    path={`dasha-${idx}`} 
+                                 />
+                               ))}
+                            </div>
+                        </div>
                     </div>
                   </div>
                 )}
+
+                {/* Hidden containers for full PDF download - ONLY rendered when downloading */}
+                {isDownloading && (
+                  <div className="absolute top-0 left-[-9999px] z-[-50] bg-slate-900">
+                    <div ref={downloadContainerRef} className="flex flex-col gap-10">
+                        
+                        {/* PAGE 1: CHARTS AND PLANETS */}
+                      {/* Using inline styles with standard hex/rgb colors to prevent html2canvas oklch parsing errors */}
+                      <div id="pdf-page-1" style={{ backgroundColor: '#0f172a', color: '#ffffff' }} className="p-8 w-[1000px] flex flex-col gap-8">
+                        <div style={{ borderBottom: '1px solid #334155' }} className="text-center pb-6">
+                            <h2 style={{ color: '#818cf8' }} className="text-4xl font-bold mb-2">
+                                {formData.name ? `${formData.name}'s ` : ''}Vedic Astrology Report
+                            </h2>
+                            <p style={{ color: '#cbd5e1' }} className="text-xl">
+                                DOB: {formData.dob} | Time: {formData.time} | Place: {formData.place}
+                            </p>
+                            <p style={{ color: '#94a3b8' }} className="text-md mt-1">({chartType === 'south' ? 'South' : 'North'} Indian Style)</p>
+                        </div>
+    
+                        <div className="flex gap-8 justify-center items-stretch">
+                            <div style={{ backgroundColor: '#020617', borderColor: '#1e293b' }} className="flex-1 p-6 rounded-xl border flex flex-col items-center">
+                            <h3 className="text-2xl font-bold mb-6 text-center">Janma Kundli (Rasi - D1)</h3>
+                            <div style={{ backgroundColor: '#ffffff', color: '#000000' }} className="rounded-lg p-4 w-full aspect-square shadow-xl">
+                                {chartType === 'south' ? (
+                                    <SouthIndianChart data={chartData} title="Rāsi Chart" />
+                                ) : (
+                                    <NorthIndianChart data={chartData} />
+                                )}
+                            </div>
+                            </div>
+    
+                            <div style={{ backgroundColor: '#020617', borderColor: '#1e293b' }} className="flex-1 p-6 rounded-xl border flex flex-col items-center">
+                            <h3 className="text-2xl font-bold mb-6 text-center">Navamsa Chart (D9)</h3>
+                            <div style={{ backgroundColor: '#ffffff', color: '#000000' }} className="rounded-lg p-4 w-full aspect-square shadow-xl">
+                                {chartType === 'south' ? (
+                                    <SouthIndianChart data={{ planets: chartData.navamsa_planets, ascendant: chartData.navamsa_ascendant }} title="Navamsa (D9)" />
+                                ) : (
+                                    <NorthIndianChart data={{ planets: chartData.navamsa_planets, ascendant: chartData.navamsa_ascendant }} />
+                                )}
+                            </div>
+                            </div>
+                        </div>
+    
+                        <div style={{ backgroundColor: '#020617', borderColor: '#1e293b' }} className="rounded-xl border p-6">
+                            <h3 className="text-xl font-bold mb-4">Planetary Positions</h3>
+                            <div className="grid grid-cols-3 gap-4">
+                            {chartData.planets.map((planet) => (
+                                <div key={`p1-${planet.name}`} style={{ borderBottom: '1px solid #1e293b' }} className="flex justify-between pb-2">
+                                    <span className="font-medium">{planet.name}</span>
+                                    <span style={{ color: '#cbd5e1' }}>
+                                    {Math.floor(planet.lon)}° {(planet.lon % 1 * 60).toFixed(0)}'
+                                    {planet.is_retrograde && <span style={{ color: '#f87171', marginLeft: '0.25rem' }}>R</span>}
+                                    </span>
+                                </div>
+                            ))}
+                            </div>
+                        </div>
+                      </div>
+
+                      {/* PAGE 2: FULL DASHA TREE */}
+                      <div id="pdf-page-2" style={{ backgroundColor: '#0f172a', color: '#ffffff' }} className="p-8 w-[1000px] flex flex-col pb-32">
+                         <div style={{ backgroundColor: '#020617', borderBottom: '1px solid #1e293b' }} className="px-6 py-4 flex justify-between items-center">
+                            <div>
+                                <h3 className="text-2xl font-bold">Expanded Vimshottari Dashas</h3>
+                                <p style={{ color: '#94a3b8' }} className="text-sm">Complete 120-Year Breakdown</p>
+                            </div>
+                         </div>
+                         <div className="w-full">
+                            <div style={{ backgroundColor: 'rgba(2, 6, 23, 0.5)', borderBottom: '1px solid #1e293b', color: '#94a3b8' }} className="flex items-center justify-between p-3 text-sm font-medium uppercase tracking-wider">
+                                <div className="w-1/3 pl-10">Dasha Level</div>
+                                <div className="w-1/4">Start</div>
+                                <div className="w-1/4">End</div>
+                                <div className="w-1/6 text-right pr-4">Duration</div>
+                            </div>
+                            <div style={{ backgroundColor: '#020617', borderColor: '#1e293b' }} className="flex flex-col border mt-2">
+                               {chartData.dashas?.map((dasha, idx) => (
+                                 <StaticDashaNode 
+                                    key={`static-dasha-${idx}`} 
+                                    dasha={dasha} 
+                                    level={1} 
+                                 />
+                               ))}
+                            </div>
+                         </div>
+                      </div>
+
+                    </div>
+                  </div>
+                )}
+
               </motion.div>
             ) : (
               <div className="h-full flex flex-col items-center justify-center text-slate-500 border-2 border-dashed border-slate-800 rounded-xl min-h-[400px]">
@@ -395,6 +569,152 @@ export default function BirthChart() {
   );
 }
 
+const DashaNode = ({ dasha, level = 1, expandedPath, setExpandedPath, path }) => {
+  const isExpanded = expandedPath.startsWith(path);
+  const isExactMatch = expandedPath === path;
+  
+  const hasSublevels = dasha.sub_levels && dasha.sub_levels.length > 0;
+  
+  const handleToggle = () => {
+    if (!hasSublevels) return;
+    
+    if (isExpanded) {
+      if (isExactMatch) {
+         const parentPath = path.includes('-') ? path.substring(0, path.lastIndexOf('-')) : '';
+         setExpandedPath(parentPath);
+      } else {
+         setExpandedPath(path);
+      }
+    } else {
+      setExpandedPath(path);
+    }
+  };
+
+  const levelColors = {
+    1: 'text-indigo-400 font-bold bg-slate-900',
+    2: 'text-purple-400 bg-slate-800/80',
+    3: 'text-pink-400 bg-slate-800/60',
+    4: 'text-rose-400 text-sm bg-slate-800/40',
+    5: 'text-amber-400 text-sm bg-slate-800/20'
+  };
+
+  const pl = 10 + (level - 1) * 20;
+
+  const levelNames = {
+    1: 'Mahadasha',
+    2: 'Bhukti',
+    3: 'Pratyantar',
+    4: 'Sookshma',
+    5: 'Praana'
+  };
+
+  return (
+    <div className="flex flex-col border-b border-slate-800/30 w-full">
+      <div 
+        className={`flex items-center justify-between p-3 cursor-pointer transition-colors hover:brightness-125 ${levelColors[level]}`}
+        style={{ paddingLeft: `${pl}px` }}
+        onClick={handleToggle}
+      >
+        <div className="flex items-center gap-2 w-1/3 min-w-[150px]">
+           <span className="w-5 flex-shrink-0 text-slate-500 text-center">
+             {hasSublevels ? (isExpanded ? '▼' : '▶') : '•'}
+           </span>
+           <span className="flex items-baseline gap-1.5 flex-wrap">
+             <span>{dasha.lord}</span>
+             <span className="text-[10px] opacity-70 font-normal uppercase tracking-wider">({levelNames[level]})</span>
+           </span>
+        </div>
+        <div className="w-1/4 text-sm text-slate-300 min-w-[100px]">{dasha.start}</div>
+        <div className="w-1/4 text-sm text-slate-300 min-w-[100px]">{dasha.end}</div>
+        <div className="w-1/6 text-sm text-slate-400 text-right pr-4 min-w-[80px]">
+           {dasha.duration_years >= 1 ? `${dasha.duration_years.toFixed(2)} Y` : `${(dasha.duration_years * 365.25).toFixed(0)} D`}
+        </div>
+      </div>
+      
+      {isExpanded && hasSublevels && (
+        <div className="flex flex-col w-full border-l border-slate-700/50">
+           {dasha.sub_levels.map((sub, idx) => (
+             <DashaNode 
+               key={`sub-${path}-${idx}`} 
+               dasha={sub} 
+               level={level + 1} 
+               expandedPath={expandedPath} 
+               setExpandedPath={setExpandedPath}
+               path={`${path}-${idx}`} 
+             />
+           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Static forced-open version of DashaNode for the PDF Export
+const StaticDashaNode = ({ dasha, level = 1 }) => {
+  const hasSublevels = dasha.sub_levels && dasha.sub_levels.length > 0;
+  
+  // Using pure hex codes instead of tailwind classes because html2canvas fails on oklch variables
+  const getLevelStyle = (lvl) => {
+      switch(lvl) {
+          case 1: return { color: '#818cf8', fontWeight: 'bold', backgroundColor: '#0f172a', borderTop: '2px solid #334155' };
+          case 2: return { color: '#c084fc', backgroundColor: 'rgba(30, 41, 59, 0.8)', borderTop: '1px solid #1e293b' };
+          case 3: return { color: '#f472b6', backgroundColor: 'rgba(30, 41, 59, 0.6)', borderTop: '1px solid #1e293b' };
+          case 4: return { color: '#fb7185', fontSize: '0.875rem', backgroundColor: 'rgba(30, 41, 59, 0.4)' };
+          case 5: return { color: '#fbbf24', fontSize: '0.875rem', backgroundColor: 'rgba(30, 41, 59, 0.2)' };
+          default: return {};
+      }
+  };
+
+  const pl = 10 + (level - 1) * 20;
+
+  const levelNames = {
+    1: 'Mahadasha',
+    2: 'Bhukti',
+    3: 'Pratyantar',
+    4: 'Sookshma',
+    5: 'Praana'
+  };
+
+  // Skip printing level 5 because it will literally crash the PDF rendering with tens of thousands of rows
+  // A full 120 year cycle up to Depth 3 is already thousands of rows. 
+  // We will stop rendering at depth 2 (Bhukti) for the PDF to prevent exceeding browser Canvas height limits (~16k pixels)
+  if (level > 2) return null;
+
+  return (
+    <div className="flex flex-col w-full">
+      <div 
+        className="flex items-center justify-between p-2.5"
+        style={{ paddingLeft: `${pl}px`, ...getLevelStyle(level) }}
+      >
+        <div className="flex items-center gap-2 w-1/3 min-w-[150px]">
+           <span style={{ color: '#64748b' }} className="w-5 flex-shrink-0 text-center">-</span>
+           <span className="flex items-baseline gap-1.5 flex-wrap">
+             <span>{dasha.lord}</span>
+             <span style={{ opacity: 0.7, fontSize: '10px' }} className="font-normal uppercase tracking-wider">({levelNames[level]})</span>
+           </span>
+        </div>
+        <div style={{ color: '#cbd5e1' }} className="w-1/4 text-sm min-w-[100px]">{dasha.start}</div>
+        <div style={{ color: '#cbd5e1' }} className="w-1/4 text-sm min-w-[100px]">{dasha.end}</div>
+        <div style={{ color: '#94a3b8' }} className="w-1/6 text-sm text-right pr-4 min-w-[80px]">
+           {dasha.duration_years >= 1 ? `${dasha.duration_years.toFixed(2)} Y` : `${(dasha.duration_years * 365.25).toFixed(0)} D`}
+        </div>
+      </div>
+      
+      {hasSublevels && (
+        <div style={{ borderColor: 'rgba(51, 65, 85, 0.3)' }} className="flex flex-col w-full border-l">
+           {dasha.sub_levels.map((sub, idx) => (
+             <StaticDashaNode 
+               key={`static-sub-${idx}`} 
+               dasha={sub} 
+               level={level + 1} 
+             />
+           ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Simple South Indian Chart Component
 function SouthIndianChart({ data, title = "Rāsi Chart" }) {
   const signPlanets = Array(12).fill().map(() => []);
@@ -408,18 +728,18 @@ function SouthIndianChart({ data, title = "Rāsi Chart" }) {
   signPlanets[ascIndex].push("ASC");
 
   const renderCell = (signIndex, label) => (
-    <div className="border border-amber-900/20 w-full h-full p-1 relative bg-amber-50 text-amber-900 text-xs font-semibold flex flex-wrap content-start gap-1">
+    <div style={{ backgroundColor: '#fffbeb', borderColor: 'rgba(120, 53, 15, 0.2)', color: '#78350f' }} className="border w-full h-full p-1 relative text-xs font-semibold flex flex-wrap content-start gap-1">
       {signPlanets[signIndex].map((p, i) => (
-         <span key={i} className="bg-amber-100 px-1 rounded">{p}</span>
+         <span key={i} style={{ backgroundColor: '#fef3c7' }} className="px-1 rounded">{p}</span>
       ))}
-      <span className="absolute bottom-0 right-1 text-[10px] opacity-40 uppercase">{label}</span>
+      <span style={{ opacity: 0.4 }} className="absolute bottom-0 right-1 text-[10px] uppercase">{label}</span>
       {/* Highlight Ascendant House */}
-      {signIndex === ascIndex && <div className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-bl-lg" title="Lagna" />}
+      {signIndex === ascIndex && <div style={{ backgroundColor: '#ef4444' }} className="absolute top-0 right-0 w-2 h-2 rounded-bl-lg" title="Lagna" />}
     </div>
   );
 
   return (
-    <div className="w-full h-full grid grid-cols-4 grid-rows-4 border-2 border-amber-800">
+    <div style={{ borderColor: '#92400e' }} className="w-full h-full grid grid-cols-4 grid-rows-4 border-2">
       {/* Row 1 */}
       {renderCell(11, "Pisces")}
       {renderCell(0, "Aries")}
@@ -428,10 +748,10 @@ function SouthIndianChart({ data, title = "Rāsi Chart" }) {
 
       {/* Row 2 */}
       {renderCell(10, "Aquarius")}
-      <div className="col-span-2 row-span-2 flex items-center justify-center bg-amber-50/50">
+      <div style={{ backgroundColor: 'rgba(255, 251, 235, 0.5)' }} className="col-span-2 row-span-2 flex items-center justify-center">
         <div className="text-center">
-            <h3 className="font-serif text-amber-900 text-xl font-bold">{title}</h3>
-            <p className="text-[10px] text-amber-700">South Indian Style</p>
+            <h3 style={{ color: '#78350f' }} className="font-serif text-xl font-bold">{title}</h3>
+            <p style={{ color: '#b45309' }} className="text-[10px]">South Indian Style</p>
         </div>
       </div>
       {renderCell(3, "Cancer")}

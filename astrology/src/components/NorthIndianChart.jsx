@@ -129,8 +129,8 @@ export default function NorthIndianChart({ data }) {
                         y={i * 12 - (planets.length * 6)} 
                         x={0}
                         textAnchor="middle"
-                        className={`font-semibold ${p.isRetro ? "fill-red-600" : "fill-slate-900"}`}
-                        style={{ fontSize: '11px' }}
+                        className="font-semibold"
+                        style={{ fontSize: '11px', fill: p.isRetro ? '#dc2626' : '#0f172a' }}
                     >
                         {p.name}{p.isRetro ? "ᴿ" : ""}
                     </text>
@@ -139,7 +139,7 @@ export default function NorthIndianChart({ data }) {
          )
       })}
       
-      <text x="390" y="390" textAnchor="end" className="text-[8px] fill-amber-900/50">North Indian Style</text>
+      <text x="390" y="390" textAnchor="end" style={{ fill: 'rgba(120, 53, 15, 0.5)' }} className="text-[8px]">North Indian Style</text>
     </svg>
   );
 }
