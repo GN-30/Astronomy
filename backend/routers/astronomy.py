@@ -6,6 +6,9 @@ import pytz
 import os
 import requests
 import json
+import math
+from dotenv import load_dotenv
+import json
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -62,7 +65,9 @@ def calculate_chart(data: BirthDetails):
         flags = swe.FLG_MOSEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED 
 
         chart_data = []
+        navamsa_data = []
         rahu_data = None
+        moon_lon = 0
 
         for pid, name in planets_map.items():
             res = swe.calc_ut(jd, pid, flags)
@@ -81,9 +86,20 @@ def calculate_chart(data: BirthDetails):
                 "speed": speed_lon
             }
             chart_data.append(planet_info)
+
+            # Calculate Navamsa (D9)
+            navamsa_lon = (lon * 9) % 360.0
+            navamsa_data.append({
+                "name": name,
+                "lon": navamsa_lon,
+                "is_retrograde": is_retro
+            })
             
             if name == "Rahu":
                 rahu_data = planet_info
+            
+            if name == "Moon":
+                moon_lon = lon
 
         # Calculate Ketu (Opposite to Rahu)
         if rahu_data:
@@ -93,6 +109,11 @@ def calculate_chart(data: BirthDetails):
                 "lon": ketu_lon,
                 "is_retrograde": True # Nodes are always retrograde (Mean)
             })
+            navamsa_data.append({
+                "name": "Ketu",
+                "lon": (ketu_lon * 9) % 360.0,
+                "is_retrograde": True
+            })
 
         # Calculate Houses (Sidereal)
         # Use Whole Sign (W) for Vedic Rasi Chart compatibility
@@ -100,12 +121,56 @@ def calculate_chart(data: BirthDetails):
         houses_res, ascmc = swe.houses_ex(jd, data.lat, data.lon, h_sys, flags)
         ascendant = ascmc[0]
         
+        # Determine Navamsa Ascendant
+        navamsa_ascendant = (ascendant * 9) % 360.0
+        
         houses = []
         for i, cusp in enumerate(houses_res):
             houses.append({
                 "house": i + 1,
                 "degree": cusp
             })
+
+        # Calculate Vimshottari Dasha
+        dasha_lords = ["Ketu", "Venus", "Sun", "Moon", "Mars", "Rahu", "Jupiter", "Saturn", "Mercury"]
+        dasha_years = [7, 20, 6, 10, 7, 18, 16, 19, 17] # Total 120 years
+        
+        nakshatra_len = 13.0 + (1.0/3.0) # 13 degrees 20 minutes
+        nakshatra_num = moon_lon / nakshatra_len
+        nakshatra_idx = int(math.floor(nakshatra_num))
+        
+        # E.g., Ashwini is 0. Lord is Ketu (index 0). 
+        # Bharani is 1. Lord is Venus (index 1).
+        lord_idx = nakshatra_idx % 9
+        
+        fraction_left = 1.0 - (nakshatra_num - nakshatra_idx)
+        years_left_first_dasha = fraction_left * dasha_years[lord_idx]
+        
+        dashas = []
+        current_date = dt_ist
+        start_date = current_date
+        
+        # Calculate for 120 years
+        for i in range(9):
+            idx = (lord_idx + i) % 9
+            lord = dasha_lords[idx]
+            
+            if i == 0:
+                duration_years = years_left_first_dasha
+            else:
+                duration_years = dasha_years[idx]
+            
+            days = duration_years * 365.2425
+            end_date = start_date + datetime.timedelta(days=days)
+            
+            dashas.append({
+                "lord": lord,
+                "start": start_date.strftime("%Y-%m-%d"),
+                "end": end_date.strftime("%Y-%m-%d"),
+                "duration_years": round(duration_years, 2)
+            })
+            
+            start_date = end_date
             
         # Debugging Print
         print(f"Chart Calc: {data.dob} {data.time} (UTC: {dt_utc})")
@@ -114,8 +179,11 @@ def calculate_chart(data: BirthDetails):
 
         return {
             "ascendant": ascendant,
+            "navamsa_ascendant": navamsa_ascendant,
             "planets": chart_data,
+            "navamsa_planets": navamsa_data,
             "houses": houses,
+            "dashas": dashas,
             "meta": {
                 "julian_day": jd,
                 "ayanamsa": "Lahiri (Sidereal)",

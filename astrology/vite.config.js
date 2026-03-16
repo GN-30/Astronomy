@@ -15,9 +15,9 @@ export default defineConfig({
       },
       includeAssets: ['apple-touch-icon.png'],
       manifest: {
-        name: 'Astrology App',
-        short_name: 'Astrology',
-        description: 'Discover your celestial destiny with our modern Astrology App',
+        name: 'AstroNova',
+        short_name: 'AstroNova',
+        description: 'Discover your celestial destiny with our modern AstroNova App',
         theme_color: '#0f172a',
         background_color: '#0f172a',
         display: 'standalone',

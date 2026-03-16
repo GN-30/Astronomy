@@ -92,11 +92,11 @@ const InstallPrompt = () => {
             </div>
             
             <div className="flex-1 pr-6">
-              <h3 className="text-white font-semibold text-lg leading-tight">Install AstroMind</h3>
+              <h3 className="text-white font-semibold text-lg leading-tight">Install AstroNova</h3>
               <p className="text-slate-400 text-sm mt-1">
                 {isIOS 
                   ? "Tap the Share button and select 'Add to Home Screen' for the full experience."
-                  : "Add AstroMind to your home screen for faster access and offline features."}
+                  : "Add AstroNova to your home screen for faster access and offline features."}
               </p>
             </div>
           </div>
