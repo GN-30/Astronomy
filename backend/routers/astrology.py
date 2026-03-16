@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 import os
 import requests
@@ -7,6 +7,8 @@ import random
 import swisseph as swe
 import datetime
 import pytz
+import base64
+import io
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -83,16 +85,14 @@ def calculate_positions(data: BirthDetails):
         return None
 
 
-def get_local_analysis(data: BirthDetails):
+def get_local_analysis(data: BirthDetails = None):
     """Fallback deterministic analysis generator"""
     # Try accurate calculation first
-    calculated = calculate_positions(data)
+    calculated = calculate_positions(data) if data else None
     
     if calculated:
         ascendant = calculated['ascendant']
         # Convert planets list to formatted dictionary for templates
-        # We need to map planets to signs for the "random" text generation parts if needed, 
-        # or just use the raw data (which is better).
         
         # Determine Moon Sign
         moon_sign = next((p['sign'] for p in calculated['planets'] if p['name'] == 'Moon'), "Unknown")
@@ -111,40 +111,18 @@ def get_local_analysis(data: BirthDetails):
             planetary_details.append({
                 "planet": p['name'], 
                 "sign": p['sign'], 
-                "house": "Derived later", # House calc is complex to map to "1,2..12" without house system logic fully exposed, but we can mock or enhance. 
-                # Actually calculate_positions doesn't return house numbers for planets yet, just the Asc. 
-                # Ideally Swisseph gives houses. For now, random House is fine for fallback 
-                # as long as Sign is accurate.
                 "house": str(random.randint(1, 12)), 
                 "significance": significances.get(p['name'], "Influence")
             })
 
     else:
-        # Fallback to approximation if calculation fails completely
-        # (Original Logic)
-        month = int(data.dob.split('-')[1])
-        day = int(data.dob.split('-')[2])
+        # Fallback to random if no data provided
+        ascendants = ["Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo", "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"]
+        ascendant = random.choice(ascendants)
+        moon_sign = random.choice(ascendants)
         
-        # Simple Sun Sign Lookup
-        cutoff_dates = [20, 19, 21, 20, 21, 21, 23, 23, 23, 23, 22, 22]
-        if day >= cutoff_dates[month-1]:
-            sun_idx = (month) % 12
-        else:
-            sun_idx = (month - 1) % 12
-        
-        sun_sign = ascendants[sun_idx]
-        
-        # Refine Ascendant (Approximate)
-        hour = int(data.time.split(':')[0])
-        asc_shift = int((hour - 6) / 2)
-        asc_idx = (sun_idx + asc_shift) % 12
-        ascendant = ascendants[asc_idx]
-        
-        moon_sign = random.choice(moon_signs)
-        
-        # Generate random planetary details for fallback
         planetary_details = [
-            {"planet": "Sun", "sign": sun_sign, "house": str(random.randint(1, 10)), "significance": "Soul & Life Path"},
+            {"planet": "Sun", "sign": random.choice(ascendants), "house": str(random.randint(1, 10)), "significance": "Soul & Life Path"},
             {"planet": "Moon", "sign": moon_sign, "house": str(random.randint(1, 12)), "significance": "Mind & Emotions"},
             {"planet": "Mars", "sign": random.choice(ascendants), "house": str(random.randint(1, 12)), "significance": "Action & Energy"},
             {"planet": "Mercury", "sign": random.choice(ascendants), "house": str(random.randint(1, 12)), "significance": "Intellect"},
@@ -293,6 +271,9 @@ def get_prediction(request: PredictionRequest):
             return get_local_prediction(request.rasi, request.date)
 
         data = response.json()
+        if 'candidates' not in data or not data['candidates']:
+             return get_local_prediction(request.rasi, request.date)
+
         text = data['candidates'][0]['content']['parts'][0]['text'].strip()
         
         print(f"AI Response: {text[:50]}...") # Log first 50 chars
@@ -320,9 +301,6 @@ def get_prediction(request: PredictionRequest):
 
 @router.post("/analyze_chart")
 def analyze_chart(data: BirthDetails):
-    # Use fallback immediately if no key logic will be handled in try/except or explicit check
-    pass 
-
     try:
         active_key = GEMINI_ANALYSIS_KEY
         if not active_key:
@@ -379,7 +357,7 @@ def analyze_chart(data: BirthDetails):
         Do not include markdown code blocks. Just the raw JSON.
         """
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={active_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={active_key}"
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         headers = {'Content-Type': 'application/json'}
         
@@ -400,4 +378,75 @@ def analyze_chart(data: BirthDetails):
     except Exception as e:
         print(f"Chart Analysis Error: {e} -> Switching to Local Fallback")
         return get_local_analysis(data)
+
+@router.post("/analyze_image")
+async def analyze_image(file: UploadFile = File(...), name: str = Form("User")):
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=400, detail="Gemini API Key is required for vision analysis.")
+        
+    try:
+        # Read file and encode to base64
+        contents = await file.read()
+        encoded_string = base64.b64encode(contents).decode('utf-8')
+        mime_type = file.content_type
+
+        prompt = f"""
+        Act as an expert Vedic Astrologer. I am uploading an image/PDF of a Janma Kundli (Birth Chart) for {name}.
+        
+        Your task:
+        1. Identify the Rasi Chart (D1) in the image.
+        2. Identify the Ascendant (Lagna) and the positions of all planets: Sun, Moon, Mars, Mercury, Jupiter, Venus, Saturn, Rahu, and Ketu.
+        3. Based on these positions, provide a deep interpretation of the personality, strengths, challenges, and life overview (Career, Relationships, Health).
+        
+        If the chart is South Indian style or North Indian style, parse it accordingly.
+        
+        Format the output strictly as a JSON object:
+        {{
+            "ascendant": "Deep interpretation of the Lagna...",
+            "moon_sign": "Interpretation of the Moon Sign...",
+            "planetary_details": [
+                {{"planet": "Sun", "sign": "...", "house": "...", "significance": "..."}},
+                ... (one for each major planet)
+            ],
+            "strengths": ["...", "...", "..."],
+            "challenges": ["...", "...", "..."],
+            "life_predictions": {{
+                "career": "...",
+                "relationships": "...",
+                "health": "..."
+            }}
+        }}
+        Do not include markdown code blocks. Just the raw JSON.
+        """
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {"text": prompt},
+                        {"inline_data": {"mime_type": mime_type, "data": encoded_string}}
+                    ]
+                }
+            ]
+        }
+        
+        headers = {'Content-Type': 'application/json'}
+        response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=30)
+        response.raise_for_status()
+        
+        data = response.json()
+        raw_text = data['candidates'][0]['content']['parts'][0]['text']
+        
+        # Clean potential markdown
+        if "```json" in raw_text:
+            raw_text = raw_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in raw_text:
+            raw_text = raw_text.split("```")[1].split("```")[0].strip()
+            
+        return json.loads(raw_text)
+
+    except Exception as e:
+        print(f"Vision Analysis Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to analyze chart image: {str(e)}")
 

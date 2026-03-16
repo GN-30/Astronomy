@@ -1,37 +1,125 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import axios from 'axios';
-import { motion } from 'framer-motion';
-import { Calendar, Clock, MapPin, Sparkles, BookOpen, Heart, Briefcase, Activity } from 'lucide-react';
-import bgImage from '../assets/birthchart_bg.png'; // Reusing the background
+import { motion, AnimatePresence } from 'framer-motion';
+import { Calendar, Clock, MapPin, Sparkles, BookOpen, Heart, Briefcase, Activity, Upload, Edit3, RefreshCw, Navigation, Search } from 'lucide-react';
+import bgImage from '../assets/birthchart_bg.png';
 import PageTransition from '../components/PageTransition';
 import CosmicLoader from '../components/CosmicLoader';
+import FileUploader from '../components/FileUploader';
 
 export default function ChartAnalysis() {
+  const [mode, setMode] = useState('manual'); // 'manual' or 'upload'
   const [formData, setFormData] = useState({
+    name: '',
     dob: '',
     time: '',
     place: 'Chennai',
     lat: '13.0827',
     lon: '80.2707'
   });
+  const [uploadFile, setUploadFile] = useState(null);
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const searchTimeout = useRef(null);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const searchLocation = async (query) => {
+    if (!query || query.length < 3) {
+      setSearchResults([]);
+      setShowDropdown(false);
+      return;
+    }
+    setIsSearching(true);
+    try {
+      const res = await axios.get(`https://nominatim.openstreetmap.org/search`, {
+        params: { q: query, format: 'json', limit: 5 }
+      });
+      setSearchResults(res.data);
+      setShowDropdown(true);
+    } catch (err) {
+      console.error("Error fetching locations:", err);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handlePlaceChange = (e) => {
+    const value = e.target.value;
+    setFormData({ ...formData, place: value });
+    
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    searchTimeout.current = setTimeout(() => {
+      searchLocation(value);
+    }, 500);
+  };
+
+  const selectLocation = (loc) => {
+    setFormData({
+      ...formData,
+      place: loc.display_name.split(',')[0],
+      lat: parseFloat(loc.lat).toFixed(4),
+      lon: parseFloat(loc.lon).toFixed(4)
+    });
+    setShowDropdown(false);
+  };
+
+  const getCurrentLocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const lat = position.coords.latitude.toFixed(4);
+          const lon = position.coords.longitude.toFixed(4);
+          try {
+            const res = await axios.get(`https://nominatim.openstreetmap.org/reverse`, {
+              params: { lat, lon, format: 'json' }
+            });
+            const placeName = res.data.address.city || res.data.address.town || res.data.name || "Current Location";
+            setFormData({ ...formData, place: placeName, lat, lon });
+          } catch (err) {
+            setFormData({ ...formData, place: 'Current Location', lat, lon });
+          }
+        }
+      );
+    }
+  };
+
   const generateAnalysis = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     setLoading(true);
+    setAnalysis(null);
     try {
       const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-      const res = await axios.post(`${baseUrl}/astrology/analyze_chart`, {
-        ...formData,
-        lat: parseFloat(formData.lat),
-        lon: parseFloat(formData.lon)
-      });
-      setAnalysis(res.data);
+      
+      if (mode === 'upload') {
+        if (!uploadFile) {
+          alert("Please upload a Kundli chart to analyze.");
+          setLoading(false);
+          return;
+        }
+        
+        const data = new FormData();
+        data.append('file', uploadFile);
+        data.append('name', formData.name || 'User');
+
+        const res = await axios.post(`${baseUrl}/astrology/analyze_image`, data, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        setAnalysis(res.data);
+      } else {
+        const res = await axios.post(`${baseUrl}/astrology/analyze_chart`, {
+          ...formData,
+          lat: parseFloat(formData.lat),
+          lon: parseFloat(formData.lon)
+        });
+        setAnalysis(res.data);
+      }
     } catch (err) {
       console.error(err);
       const msg = err.response?.data?.detail || "Error generating analysis. Please try again.";
@@ -57,68 +145,172 @@ export default function ChartAnalysis() {
                 <p className="text-slate-400">Unlock the secrets of your personality and destiny</p>
             </div>
 
+            {/* Mode Toggle */}
+            <div className="flex justify-center mb-8">
+                <div className="bg-slate-900/80 p-1 rounded-xl border border-slate-700 flex backdrop-blur-sm">
+                    <button 
+                        onClick={() => { setMode('manual'); setAnalysis(null); }}
+                        className={`px-6 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all cursor-pointer ${mode === 'manual' ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                    >
+                        <Edit3 size={16} /> Manual Details
+                    </button>
+                    <button 
+                        onClick={() => { setMode('upload'); setAnalysis(null); }}
+                        className={`px-6 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all cursor-pointer ${mode === 'upload' ? 'bg-pink-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                    >
+                        <Upload size={16} /> Upload Chart
+                    </button>
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Input Section */}
                 <div className="lg:col-span-1">
                     <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-6 shadow-xl sticky top-24">
                         <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                            <Sparkles size={20} className="text-purple-400"/> Enter Details
+                            <Sparkles size={20} className="text-purple-400"/> {mode === 'upload' ? 'Upload Kundli' : 'Enter Details'}
                         </h2>
-                        <form onSubmit={generateAnalysis} className="space-y-4">
-                            <div>
-                                <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Date of Birth</label>
-                                <div className="relative">
-                                    <Calendar className="absolute left-3 top-3 text-slate-500" size={16} />
-                                    <input 
-                                        type="date" name="dob" required
-                                        value={formData.dob} onChange={handleChange}
-                                        className="w-full bg-slate-800 border-slate-700 rounded-lg pl-10 py-2.5 text-white focus:ring-purple-500 focus:border-purple-500"
-                                    />
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Time of Birth</label>
-                                <div className="relative">
-                                    <Clock className="absolute left-3 top-3 text-slate-500" size={16} />
-                                    <input 
-                                        type="time" name="time" required
-                                        value={formData.time} onChange={handleChange}
-                                        className="w-full bg-slate-800 border-slate-700 rounded-lg pl-10 py-2.5 text-white focus:ring-purple-500 focus:border-purple-500"
-                                    />
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Place</label>
-                                <div className="relative">
-                                    <MapPin className="absolute left-3 top-3 text-slate-500" size={16} />
-                                    <input 
-                                        type="text" name="place" required
-                                        value={formData.place} onChange={handleChange}
-                                        className="w-full bg-slate-800 border-slate-700 rounded-lg pl-10 py-2.5 text-white focus:ring-purple-500 focus:border-purple-500"
-                                    />
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <input 
-                                    type="number" step="any" name="lat" placeholder="Lat" required
-                                    value={formData.lat} onChange={handleChange}
-                                    className="w-full bg-slate-800 border-slate-700 rounded-lg py-2.5 px-3 text-white"
-                                />
-                                <input 
-                                    type="number" step="any" name="lon" placeholder="Lon" required
-                                    value={formData.lon} onChange={handleChange}
-                                    className="w-full bg-slate-800 border-slate-700 rounded-lg py-2.5 px-3 text-white"
-                                />
-                            </div>
+                        
+                        <AnimatePresence mode="wait">
+                            {mode === 'manual' ? (
+                                <motion.form 
+                                    key="manual-form"
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -10 }}
+                                    onSubmit={generateAnalysis} 
+                                    className="space-y-4"
+                                >
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Name</label>
+                                        <input 
+                                            type="text" name="name" required
+                                            value={formData.name} onChange={handleChange}
+                                            placeholder="Full Name"
+                                            className="w-full bg-slate-800 border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-purple-500"
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Date of Birth</label>
+                                            <div className="relative">
+                                                <Calendar className="absolute left-3 top-3 text-slate-500" size={16} />
+                                                <input 
+                                                    type="date" name="dob" required
+                                                    value={formData.dob} onChange={handleChange}
+                                                    className="w-full bg-slate-800 border-slate-700 rounded-lg pl-10 py-2.5 text-white focus:ring-purple-500 focus:border-purple-500"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Time of Birth</label>
+                                            <div className="relative">
+                                                <Clock className="absolute left-3 top-3 text-slate-500" size={16} />
+                                                <input 
+                                                    type="time" name="time" required
+                                                    value={formData.time} onChange={handleChange}
+                                                    className="w-full bg-slate-800 border-slate-700 rounded-lg pl-10 py-2.5 text-white focus:ring-purple-500 focus:border-purple-500"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="relative">
+                                        <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Place of Birth</label>
+                                        <div className="flex gap-2 relative">
+                                            <div className="relative flex-1">
+                                                <Search className="absolute left-3 top-3 text-slate-500" size={16} />
+                                                <input 
+                                                    type="text" name="place" required autoComplete="off"
+                                                    value={formData.place} onChange={handlePlaceChange}
+                                                    onFocus={() => { if (searchResults.length > 0) setShowDropdown(true); }}
+                                                    onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+                                                    placeholder="Search city..."
+                                                    className="w-full bg-slate-800 border-slate-700 rounded-lg pl-10 py-2.5 text-white focus:ring-purple-500 focus:border-purple-500"
+                                                />
+                                                {isSearching && (
+                                                    <div className="absolute right-3 top-3">
+                                                        <RefreshCw className="animate-spin text-slate-500" size={16} />
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={getCurrentLocation}
+                                                className="bg-slate-800 hover:bg-slate-700 p-2.5 rounded-lg border border-slate-700 text-purple-400 hover:text-purple-300 transition-colors"
+                                                title="Use Current Location"
+                                            >
+                                                <Navigation size={20} />
+                                            </button>
+                                            
+                                            {/* Autocomplete Dropdown */}
+                                            {showDropdown && searchResults.length > 0 && (
+                                            <div className="absolute top-full left-0 right-12 mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden">
+                                                {searchResults.map((loc, idx) => (
+                                                <div 
+                                                    key={idx}
+                                                    onClick={() => selectLocation(loc)}
+                                                    className="p-3 hover:bg-slate-700 cursor-pointer border-b border-slate-700/50 last:border-0"
+                                                >
+                                                    <p className="text-white text-sm font-medium">{loc.display_name.split(',')[0]}</p>
+                                                    <p className="text-slate-400 text-[10px] truncate">{loc.display_name}</p>
+                                                </div>
+                                                ))}
+                                            </div>
+                                            )}
+                                        </div>
+                                        <div className="flex gap-3 mt-1 px-1 text-[10px] font-mono text-slate-500">
+                                            <span>LAT: {formData.lat}</span>
+                                            <span>LON: {formData.lon}</span>
+                                        </div>
+                                    </div>
 
-                            <button 
-                                type="submit" 
-                                disabled={loading}
-                                className="w-full mt-2 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-bold py-3 rounded-lg shadow-lg active:scale-95 transition-all cursor-pointer"
-                            >
-                                {loading ? "Analyzing..." : "Get Analysis"}
-                            </button>
-                        </form>
+                                    <button 
+                                        type="submit" 
+                                        disabled={loading}
+                                        className="w-full mt-2 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-bold py-3 rounded-lg shadow-lg active:scale-95 transition-all cursor-pointer"
+                                    >
+                                        {loading ? "Analyzing..." : "Get Analysis"}
+                                    </button>
+                                </motion.form>
+                            ) : (
+                                <motion.div 
+                                    key="upload-form"
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -10 }}
+                                    className="space-y-4"
+                                >
+                                    <div className="mb-4">
+                                        <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Name (Optional)</label>
+                                        <input 
+                                            type="text" name="name"
+                                            value={formData.name} onChange={handleChange}
+                                            placeholder="Enter name"
+                                            className="w-full bg-slate-800 border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-purple-500"
+                                        />
+                                    </div>
+                                    
+                                    <FileUploader 
+                                        label="Birth Chart Image or PDF" 
+                                        onFileSelect={setUploadFile} 
+                                    />
+                                    
+                                    <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700/50 mt-4">
+                                        <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Instructions</p>
+                                        <p className="text-xs text-slate-300">Upload a clear image of your Rasi Chart (South or North Indian). Gemini Vision will extract the planetary positions for interpretation.</p>
+                                    </div>
+
+                                    <button 
+                                        onClick={generateAnalysis}
+                                        disabled={loading}
+                                        className="w-full mt-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-3 rounded-lg shadow-lg active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2"
+                                    >
+                                        {loading ? <RefreshCw className="animate-spin" size={20} /> : <Sparkles size={20} />}
+                                        {loading ? "Reading Chart..." : "Analyze Upload"}
+                                    </button>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                     </div>
                 </div>
 
@@ -213,7 +405,7 @@ export default function ChartAnalysis() {
                     ) : (
                         <div className="h-full flex flex-col items-center justify-center text-slate-500 border-2 border-dashed border-slate-800 rounded-xl min-h-[400px]">
                             <BookOpen size={48} className="mb-4 opacity-50" />
-                            <p>Enter your birth details to receive a comprehensive analysis</p>
+                            <p>{mode === 'upload' ? 'Upload your chart image to get deep insights' : 'Enter your birth details to receive a comprehensive analysis'}</p>
                         </div>
                     )}
                 </div>
