@@ -422,27 +422,27 @@ export default function BirthChart() {
                 </button>
                 
                 {/* Planetary Table */}
-                <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden mt-6">
+                <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-x-auto mt-6">
                   <table className="min-w-full divide-y divide-slate-800">
                     <thead className="bg-slate-950">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Planet</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Nakshatra</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Charan</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Longitude</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Status</th>
+                        <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Planet</th>
+                        <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Nakshatra</th>
+                        <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Charan</th>
+                        <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Longitude</th>
+                        <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Status</th>
                       </tr>
                     </thead>
                     <tbody className="bg-slate-900 divide-y divide-slate-800">
                       {chartData.planets.map((planet) => (
                         <tr key={planet.name} className="hover:bg-slate-800/50 cursor-default">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{planet.name}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{planet.nakshatra || "..."}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{planet.charan || "..."}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
+                          <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{planet.name}</td>
+                          <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-slate-300">{planet.nakshatra || "..."}</td>
+                          <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-slate-300">{planet.charan || "..."}</td>
+                          <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-slate-300">
                             {Math.floor(planet.lon)}° {(planet.lon % 1 * 60).toFixed(0)}'
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
+                          <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-slate-300">
                             {planet.is_retrograde ? <span className="text-red-400 font-bold">R</span> : <span className="text-green-400">D</span>}
                           </td>
                         </tr>
