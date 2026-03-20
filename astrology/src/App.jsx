@@ -7,6 +7,7 @@ import BirthChart from './pages/BirthChart';
 import Matchmaking from './pages/Matchmaking';
 import Interpretation from './pages/Interpretation';
 import ChartAnalysis from './pages/ChartAnalysis';
+import Panchangam from './pages/Panchangam';
 import { motion, AnimatePresence } from 'framer-motion';
 import CosmicParticles from './components/CosmicParticles';
 import InstallPrompt from './components/InstallPrompt';
@@ -43,6 +44,7 @@ function Navbar() {
             <Link to="/chart" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">Birth Chart</Link>
             <Link to="/analysis" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">Analysis</Link>
             <Link to="/match" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">Matchmaking</Link>
+            <Link to="/panchangam" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">Panchangam</Link>
             
             {user && (
               <div className="flex items-center gap-4 pl-6 border-l border-white/10">
@@ -112,6 +114,13 @@ function Navbar() {
               >
                 Analysis
               </Link>
+              <Link 
+                to="/panchangam" 
+                onClick={() => setIsOpen(false)}
+                className="text-base font-medium text-slate-300 hover:text-white hover:bg-white/5 px-3 py-2 rounded-lg transition-colors"
+              >
+                Panchangam
+              </Link>
               <button 
                 onClick={() => { handleLogout(); setIsOpen(false); }}
                 className="text-base font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 px-3 py-2 rounded-lg transition-colors flex items-center gap-2"
@@ -163,6 +172,7 @@ function RoutesWrapper() {
                 <Route path="/chart" element={<RequireAuth><BirthChart /></RequireAuth>} />
                 <Route path="/match" element={<RequireAuth><Matchmaking /></RequireAuth>} />
                 <Route path="/analysis" element={<RequireAuth><ChartAnalysis /></RequireAuth>} />
+                <Route path="/panchangam" element={<RequireAuth><Panchangam /></RequireAuth>} />
                 <Route path="/interpretation" element={<RequireAuth><Interpretation /></RequireAuth>} />
            </Routes>
          </AnimatePresence>

@@ -242,3 +242,208 @@ def match_profiles(req: MatchRequest):
         print(f"Match Error: {e}")
         return get_local_match(req.boy.name, req.girl.name)
 
+class PanchangamRequest(BaseModel):
+    date: str
+    time: str
+    lat: float
+    lon: float
+
+@router.post("/panchangam")
+def get_panchangam(req: PanchangamRequest):
+    try:
+        # 1. Parse date/time
+        dt_str = f"{req.date} {req.time}"
+        dt = datetime.datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
+        
+        # 2. Local to UTC
+        ist = pytz.timezone('Asia/Kolkata')
+        dt_ist = ist.localize(dt)
+        dt_utc = dt_ist.astimezone(pytz.UTC)
+        
+        # 3. Julian Day
+        jd = swe.julday(dt_utc.year, dt_utc.month, dt_utc.day, 
+                        dt_utc.hour + dt_utc.minute/60.0 + dt_utc.second/3600.0)
+
+        # 4. Sunrise/Sunset (for Rahu Kaalam etc)
+        # We calculate for the start of the day at 0:00 UTC
+        jd_day = swe.julday(dt_utc.year, dt_utc.month, dt_utc.day, 0)
+        
+        # Simplified Rise/Set if rise_trans fails or for speed
+        # For true Vedic, we need the rise of the limb
+        try:
+            # Using body_name=None and adding SWIEPH flag if possible
+            # Note: We use jd_day (midnight UTC) as start
+            res_rise = swe.rise_trans(jd_day, swe.SUN, None, swe.CALC_RISE | swe.BIT_DISC_CENTER, flags=swe.FLG_MOSEPH, 
+                                     geopos=(req.lon, req.lat, 0))
+            sunrise_jd = res_rise[0][0]
+            res_set = swe.rise_trans(jd_day, swe.SUN, None, swe.CALC_SET | swe.BIT_DISC_CENTER, flags=swe.FLG_MOSEPH, 
+                                    geopos=(req.lon, req.lat, 0))
+            sunset_jd = res_set[0][0]
+        except Exception as e_rise:
+            print(f"Sunrise/Set calculation error: {e_rise}")
+            # Fallback to roughly 6am/6pm local time
+            sunrise_jd = jd_day + (6 - 5.5)/24.0
+            sunset_jd = jd_day + (18 - 5.5)/24.0
+
+        def jd_to_local_str(jd_val):
+            y_f, m_f, d_f, h = swe.revjul(jd_val)
+            y, m, d, hour = int(y_f), int(m_f), int(d_f), int(h)
+            min_float = (h - hour) * 60
+            minute = int(min_float)
+            sec_float = (min_float - minute) * 60
+            second = int(sec_float)
+            
+            # Safe boundary checks for minute/second
+            if second >= 60:
+                second = 59
+            if minute >= 60:
+                minute = 59
+                
+            dt_utc_val = pytz.UTC.localize(datetime.datetime(y, m, d, hour, minute, second))
+            dt_ist_val = dt_utc_val.astimezone(ist)
+            return dt_ist_val.strftime("%I:%M %p")
+
+        # Day length calculations
+        day_length = (sunset_jd - sunrise_jd) * 24.0
+        period_len = day_length / 8.0
+
+        # Rahu/Yama/Gulika Mapping (Day of week: 0=Sun, 1=Mon, ..., 6=Sat)
+        weekday = dt_ist.isoweekday() % 7
+        
+        # Rahu Kaalam periods (8 parts of day)
+        rahu_periods = [8, 2, 7, 5, 6, 4, 3] # Sun, Mon, Tue, Wed, Thu, Fri, Sat
+        rahu_idx = rahu_periods[weekday]
+        rahu_start = sunrise_jd + (rahu_idx - 1) * (period_len / 24.0)
+        rahu_end = rahu_start + (period_len / 24.0)
+
+        # Yama Gandam periods
+        yama_periods = [5, 4, 3, 2, 1, 7, 6]
+        yama_idx = yama_periods[weekday]
+        yama_start = sunrise_jd + (yama_idx - 1) * (period_len / 24.0)
+        yama_end = yama_start + (period_len / 24.0)
+
+        # Gulika Kaalam
+        guli_periods = [7, 6, 5, 4, 3, 2, 1]
+        guli_idx = guli_periods[weekday]
+        guli_start = sunrise_jd + (guli_idx - 1) * (period_len / 24.0)
+        guli_end = guli_start + (period_len / 24.0)
+
+        # Nalla Neram (Auspicious Time - approximate fixed periods)
+        # Monday: 9-10.30, Tuesday: 10.30-12, Wednesday: 9-10.30, Thursday: 10.30-12, Friday: 9-10.30, Saturday: 10.30-12, Sunday: none/variable
+        # Using a more general Abhijit Muhurta (approx 48 mins around mid-day)
+        noon_jd = (sunrise_jd + sunset_jd) / 2.0
+        nalla_start = noon_jd - (24 / (24 * 60.0))
+        nalla_end = noon_jd + (24 / (24 * 60.0))
+
+        # 4. Sun and Moon positions (Sidereal)
+        swe.set_sid_mode(swe.SIDM_LAHIRI)
+        flags = swe.FLG_MOSEPH | swe.FLG_SIDEREAL
+
+        res_sun = swe.calc_ut(jd, swe.SUN, flags)[0]
+        res_moon = swe.calc_ut(jd, swe.MOON, flags)[0]
+        sun_lon = res_sun[0]
+        moon_lon = res_moon[0]
+
+        # 5. Calculations
+        # Tithi (360 / 30 = 12 deg per Tithi)
+        tithi_diff = (moon_lon - sun_lon) % 360
+        tithi_num = int(tithi_diff / 12) + 1
+        
+        # End Time Finding Helper
+        def find_end_time(start_jd, target_val, calculation_type):
+            current_jd = start_jd
+            # Check every 15 mins for 30 hours
+            for _ in range(120):
+                current_jd += 0.25 / 24.0
+                s_lon = swe.calc_ut(current_jd, swe.SUN, flags)[0][0]
+                m_lon = swe.calc_ut(current_jd, swe.MOON, flags)[0][0]
+                
+                if calculation_type == "tithi":
+                    val = (m_lon - s_lon) % 360 / 12
+                elif calculation_type == "nakshatra":
+                    val = m_lon / (360/27)
+                elif calculation_type == "yoga":
+                    val = (s_lon + m_lon) % 360 / (360/27)
+                
+                if int(val) != int(target_val):
+                    return jd_to_local_str(current_jd)
+            return "---"
+
+        tithi_end = find_end_time(jd, tithi_num - 1, "tithi")
+        
+        paksha = "Shukla" if tithi_num <= 15 else "Krishna"
+        tithi_name_idx = (tithi_num - 1) % 15
+        tithi_names = ["Pratipada", "Dwitiya", "Tritiya", "Chaturthi", "Panchami", "Shasthi", "Saptami", "Ashtami", "Navami", "Dashami", "Ekadashi", "Dwadashi", "Trayodashi", "Chaturdashi", "Purnima"]
+        if paksha == "Krishna" and tithi_name_idx == 14:
+            tithi_name = "Amavasya"
+        else:
+            tithi_name = tithi_names[tithi_name_idx]
+
+        # Nakshatra
+        nak_idx = int(moon_lon / (360/27))
+        nak_end = find_end_time(jd, nak_idx, "nakshatra")
+        nakshatras = [
+            "Ashwini", "Bharani", "Krittika", "Rohini", "Mrigashira", "Ardra", "Punarvasu", "Pushya", "Ashlesha",
+            "Magha", "Purva Phalguni", "Uttara Phalguni", "Hasta", "Chitra", "Swati", "Vishakha", "Anuradha", "Jyeshtha",
+            "Mula", "Purva Ashadha", "Uttara Ashadha", "Shravana", "Dhanishta", "Shatabhisha", "Purva Bhadrapada", "Uttara Bhadrapada", "Revati"
+        ]
+        nak_name = nakshatras[nak_idx % 27]
+
+        # Yoga
+        yoga_diff = (sun_lon + moon_lon) % 360
+        yoga_idx = int(yoga_diff / (360/27))
+        yoga_end = find_end_time(jd, yoga_idx, "yoga")
+        yogas = [
+            "Vishkumbha", "Preeti", "Ayushman", "Saubhagya", "Shobhana", "Atiganda", "Sukarma", "Dhriti", "Shula",
+            "Ganda", "Vriddhi", "Dhruva", "Vyaghata", "Harshana", "Vajra", "Siddhi", "Vyatipata", "Variyan", "Parigha",
+            "Shiva", "Siddha", "Sadhya", "Shubha", "Shukla", "Brahma", "Indra", "Vaidhriti"
+        ]
+        yoga_name = yogas[yoga_idx % 27]
+
+        # Karana (Tithi / 2 = 6 deg)
+        karanas = ["Bava", "Balava", "Kaulava", "Taitila", "Gara", "Vanija", "Vishti", "Shakuni", "Chatushpada", "Naga", "Kintughna"]
+        karana_num = int(tithi_diff / 6) + 1
+        # Simplified Karana logic
+        if karana_num == 1: kar_name = "Kintughna"
+        elif karana_num >= 58: 
+            k_idx = [58, 59, 60].index(karana_num) if karana_num in [58, 59, 60] else 0
+            kar_names_fixed = ["Shakuni", "Chatushpada", "Naga"]
+            kar_name = kar_names_fixed[k_idx]
+        else:
+            kar_name = karanas[(karana_num - 2) % 7]
+
+        # Vara (Weekday)
+        vara_names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+        # Simplified Vara (standard day)
+        # Note: True Vedic Vara starts at Sunrise. For now using standard IST day.
+        vara_name = vara_names[dt_ist.isoweekday() % 7]
+
+        return {
+            "tithi": f"{paksha} {tithi_name}",
+            "tithi_end": tithi_end,
+            "nakshatra": nak_name,
+            "nakshatra_end": nak_end,
+            "yoga": yoga_name,
+            "yoga_end": yoga_end,
+            "karana": kar_name,
+            "vara": vara_name,
+            "sun_sign": get_rasi(sun_lon),
+            "moon_sign": get_rasi(moon_lon),
+            "sunrise": jd_to_local_str(sunrise_jd),
+            "sunset": jd_to_local_str(sunset_jd),
+            "rahu_kaalam": f"{jd_to_local_str(rahu_start)} - {jd_to_local_str(rahu_end)}",
+            "yama_gandam": f"{jd_to_local_str(yama_start)} - {jd_to_local_str(yama_end)}",
+            "gulika_kaalam": f"{jd_to_local_str(guli_start)} - {jd_to_local_str(guli_end)}",
+            "nalla_neram": f"{jd_to_local_str(nalla_start)} - {jd_to_local_str(nalla_end)}",
+        }
+
+    except Exception as e:
+        import traceback
+        error_msg = f"{str(e)}\n{traceback.format_exc()}"
+        print(error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
+
+def get_rasi(lon):
+    rasis = ["Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo", "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"]
+    return rasis[int(lon/30) % 12]
+
