@@ -89,8 +89,9 @@ export default function BirthChart() {
           const lon = position.coords.longitude.toFixed(4);
           
           try {
-            const res = await axios.get(`https://nominatim.openstreetmap.org/reverse`, {
-              params: { lat, lon, format: 'json' }
+            const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+            const res = await axios.get(`${baseUrl}/astrology/reverse_geocode`, {
+              params: { lat, lon }
             });
             const placeName = res.data.address.city || res.data.address.town || res.data.name || "Current Location";
             setFormData({ ...formData, place: placeName, lat, lon });
@@ -257,7 +258,6 @@ export default function BirthChart() {
                       <Navigation size={20} />
                     </button>
                     
-                    {/* Autocomplete Dropdown */}
                     {showDropdown && searchResults.length > 0 && (
                       <div className="absolute top-full left-0 right-12 mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden">
                         {searchResults.map((loc, idx) => (
@@ -272,6 +272,28 @@ export default function BirthChart() {
                         ))}
                       </div>
                     )}
+                  </div>
+                  
+                  {/* Manual Coordinates Fallback */}
+                  <div className="grid grid-cols-2 gap-3 mt-3">
+                    <div>
+                      <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1 px-1">Latitude</label>
+                      <input 
+                        type="text" name="lat" required
+                        value={formData.lat} onChange={handleChange}
+                        placeholder="13.0827"
+                        className="w-full bg-slate-800/50 border-slate-700/50 rounded-lg px-3 py-2 text-white text-xs focus:ring-purple-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1 px-1">Longitude</label>
+                      <input 
+                        type="text" name="lon" required
+                        value={formData.lon} onChange={handleChange}
+                        placeholder="80.2707"
+                        className="w-full bg-slate-800/50 border-slate-700/50 rounded-lg px-3 py-2 text-white text-xs focus:ring-purple-500"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -405,6 +427,8 @@ export default function BirthChart() {
                     <thead className="bg-slate-950">
                       <tr>
                         <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Planet</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Nakshatra</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Charan</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Longitude</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Status</th>
                       </tr>
@@ -413,6 +437,8 @@ export default function BirthChart() {
                       {chartData.planets.map((planet) => (
                         <tr key={planet.name} className="hover:bg-slate-800/50 cursor-default">
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{planet.name}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{planet.nakshatra || "..."}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{planet.charan || "..."}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
                             {Math.floor(planet.lon)}° {(planet.lon % 1 * 60).toFixed(0)}'
                           </td>
@@ -509,11 +535,19 @@ export default function BirthChart() {
                         </div>
     
                         <div style={{ backgroundColor: '#020617', borderColor: '#1e293b' }} className="rounded-xl border p-6">
-                            <h3 className="text-xl font-bold mb-4">Planetary Positions</h3>
-                            <div className="grid grid-cols-3 gap-4">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-xl font-bold">Planetary Positions</h3>
+                                <div className="text-sm text-slate-400">
+                                    Ascendant: <span className="text-white font-bold">{chartData.asc_nakshatra}</span> Charan <span className="text-white font-bold">{chartData.asc_charan}</span>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-x-8 gap-y-2">
                             {chartData.planets.map((planet) => (
-                                <div key={`p1-${planet.name}`} style={{ borderBottom: '1px solid #1e293b' }} className="flex justify-between pb-2">
-                                    <span className="font-medium">{planet.name}</span>
+                                <div key={`p1-${planet.name}`} style={{ borderBottom: '1px solid #1e293b' }} className="flex justify-between pb-2 text-sm">
+                                    <div className="flex gap-2">
+                                        <span className="font-semibold text-indigo-300 w-16">{planet.name}</span>
+                                        <span className="text-slate-200">{planet.nakshatra} ({planet.charan})</span>
+                                    </div>
                                     <span style={{ color: '#cbd5e1' }}>
                                     {Math.floor(planet.lon)}° {(planet.lon % 1 * 60).toFixed(0)}'
                                     {planet.is_retrograde && <span style={{ color: '#f87171', marginLeft: '0.25rem' }}>R</span>}

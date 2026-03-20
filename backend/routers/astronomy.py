@@ -12,6 +12,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+GEMINI_ANALYSIS_KEY = os.getenv("GEMINI_ANALYSIS_KEY", "").strip()
+
+def get_active_key():
+    return os.getenv("GEMINI_ANALYSIS_KEY") or os.getenv("GEMINI_API_KEY")
 
 router = APIRouter(prefix="/api/astronomy", tags=["Astronomy"])
 
@@ -53,6 +57,22 @@ def calculate_chart(data: BirthDetails):
         swe.set_ephe_path('') 
         flags = swe.FLG_MOSEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED 
 
+        nakshatras = [
+            "Ashwini", "Bharani", "Krittika", "Rohini", "Mrigashira", "Ardra", "Punarvasu", "Pushya", "Ashlesha",
+            "Magha", "Purva Phalguni", "Uttara Phalguni", "Hasta", "Chitra", "Swati", "Vishakha", "Anuradha", "Jyeshtha",
+            "Mula", "Purva Ashadha", "Uttara Ashadha", "Shravana", "Dhanishta", "Shatabhisha", "Purva Bhadrapada", "Uttara Bhadrapada", "Revati"
+        ]
+
+        # Calculate Nakshatra and Charan for each planet
+        def get_nakshatra_info(lon):
+            nak_len = 360 / 27  # 13.333...
+            nak_idx = int(lon / nak_len)
+            nak_name = nakshatras[nak_idx % 27]
+            
+            # Charan (Pada) calculation: 13.333... deg / 4 = 3.333... deg per Charan
+            charan = int((lon % nak_len) / (nak_len / 4)) + 1
+            return nak_name, charan
+
         chart_data = []
         navamsa_data = []
         rahu_data = None
@@ -65,7 +85,15 @@ def calculate_chart(data: BirthDetails):
             speed_lon = coords[3]
             is_retro = speed_lon < 0
             
-            planet_info = {"name": name, "lon": lon, "is_retrograde": is_retro, "speed": speed_lon}
+            nak_name, charan = get_nakshatra_info(lon)
+            planet_info = {
+                "name": name, 
+                "lon": lon, 
+                "is_retrograde": is_retro, 
+                "speed": speed_lon,
+                "nakshatra": nak_name,
+                "charan": charan
+            }
             chart_data.append(planet_info)
             navamsa_data.append({"name": name, "lon": (lon * 9) % 360.0, "is_retrograde": is_retro})
             
@@ -74,12 +102,20 @@ def calculate_chart(data: BirthDetails):
 
         if rahu_data:
             ketu_lon = (rahu_data["lon"] + 180.0) % 360.0
-            chart_data.append({"name": "Ketu", "lon": ketu_lon, "is_retrograde": True})
+            nak_name_k, charan_k = get_nakshatra_info(ketu_lon)
+            chart_data.append({
+                "name": "Ketu", 
+                "lon": ketu_lon, 
+                "is_retrograde": True,
+                "nakshatra": nak_name_k,
+                "charan": charan_k
+            })
             navamsa_data.append({"name": "Ketu", "lon": (ketu_lon * 9) % 360.0, "is_retrograde": True})
 
         h_sys = b'W'
         houses_res, ascmc = swe.houses_ex(jd, data.lat, data.lon, h_sys, flags)
         ascendant = ascmc[0]
+        asc_nak, asc_charan = get_nakshatra_info(ascendant)
         navamsa_ascendant = (ascendant * 9) % 360.0
         
         houses = [{"house": i + 1, "degree": cusp} for i, cusp in enumerate(houses_res)]
@@ -138,7 +174,8 @@ def calculate_chart(data: BirthDetails):
             sd = end_date
             
         return {
-            "ascendant": ascendant, "navamsa_ascendant": navamsa_ascendant,
+            "ascendant": ascendant, "asc_nakshatra": asc_nak, "asc_charan": asc_charan,
+            "navamsa_ascendant": navamsa_ascendant,
             "planets": chart_data, "navamsa_planets": navamsa_data,
             "houses": houses, "dashas": dashas,
             "meta": {"ayanamsa": "Lahiri (Sidereal)", "house_system": "Whole Sign"}
@@ -193,7 +230,7 @@ def match_profiles(req: MatchRequest):
         Output strictly valid, parseable JSON:
         {{ "score": <number_out_of_36>, "verdict": "...", "analysis": "..." }}
         """
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+        url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={get_active_key()}"
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         response = requests.post(url, headers={'Content-Type': 'application/json'}, data=json.dumps(payload), timeout=10)
         response.raise_for_status()
@@ -204,55 +241,4 @@ def match_profiles(req: MatchRequest):
     except Exception as e:
         print(f"Match Error: {e}")
         return get_local_match(req.boy.name, req.girl.name)
-
-@router.post("/match_images")
-async def match_images(
-    boy_chart: UploadFile = File(...), 
-    girl_chart: UploadFile = File(...), 
-    boy_name: str = Form("Boy"), 
-    girl_name: str = Form("Girl")
-):
-    if not GEMINI_API_KEY:
-        raise HTTPException(status_code=400, detail="Gemini API Key is required for vision analysis.")
-    try:
-        boy_encoded = base64.b64encode(await boy_chart.read()).decode('utf-8')
-        girl_encoded = base64.b64encode(await girl_chart.read()).decode('utf-8')
-        
-        prompt = f"""
-        Perform a Vedic Astrology Matchmaking (Ashta Koota Guna Milan) based on two uploaded Rasi Charts.
-        Boy's Name: {boy_name}
-        Girl's Name: {girl_name}
-        
-        Tasks:
-        1. Identify the Moon Sign (Rasi) and Nakshatra for both individuals from the charts.
-        2. Calculate the Ashta Koota Guna Milan score (out of 36).
-        3. Provide a detailed analysis of their compatibility, strengths, potential conflicts, and remedies.
-        
-        Format the output strictly as a JSON object:
-        {{
-            "score": <number_out_of_36>,
-            "verdict": "<short_title_e.g_Excellent_Match>",
-            "analysis": "<detailed_multi_paragraph_analysis>"
-        }}
-        Do not include markdown code blocks. Just the raw JSON.
-        """
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
-        payload = {
-            "contents": [{
-                "parts": [
-                    {"text": prompt},
-                    {"inline_data": {"mime_type": boy_chart.content_type, "data": boy_encoded}},
-                    {"inline_data": {"mime_type": girl_chart.content_type, "data": girl_encoded}}
-                ]
-            }]
-        }
-        res = requests.post(url, headers={'Content-Type': 'application/json'}, data=json.dumps(payload), timeout=30)
-        res.raise_for_status()
-        raw_text = res.json()['candidates'][0]['content']['parts'][0]['text']
-        if "```json" in raw_text: raw_text = raw_text.split("```json")[1].split("```")[0].strip()
-        elif "```" in raw_text: raw_text = raw_text.split("```")[1].split("```")[0].strip()
-        return json.loads(raw_text)
-    except Exception as e:
-        print(f"Vision Match Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 

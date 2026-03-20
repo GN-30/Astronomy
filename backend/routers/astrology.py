@@ -18,6 +18,9 @@ router = APIRouter(prefix="/api/astrology", tags=["Astrology"])
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_ANALYSIS_KEY = os.getenv("GEMINI_ANALYSIS_KEY") or GEMINI_API_KEY
 
+def get_active_key():
+    return os.getenv("GEMINI_ANALYSIS_KEY") or os.getenv("GEMINI_API_KEY")
+
 class BirthDetails(BaseModel):
     dob: str
     time: str
@@ -50,6 +53,19 @@ def calculate_positions(data: BirthDetails):
             swe.JUPITER: "Jupiter", swe.VENUS: "Venus", swe.SATURN: "Saturn", swe.MEAN_NODE: "Rahu"
         }
 
+        nakshatras = [
+            "Ashwini", "Bharani", "Krittika", "Rohini", "Mrigashira", "Ardra", "Punarvasu", "Pushya", "Ashlesha",
+            "Magha", "Purva Phalguni", "Uttara Phalguni", "Hasta", "Chitra", "Swati", "Vishakha", "Anuradha", "Jyeshtha",
+            "Mula", "Purva Ashadha", "Uttara Ashadha", "Shravana", "Dhanishta", "Shatabhisha", "Purva Bhadrapada", "Uttara Bhadrapada", "Revati"
+        ]
+
+        def get_nakshatra_info(lon):
+            nak_len = 360 / 27
+            idx = int(lon / nak_len)
+            name = nakshatras[idx % 27]
+            charan = int((lon % nak_len) / (nak_len / 4)) + 1
+            return name, charan
+
         positions = []
         rahu_lon = 0
         
@@ -61,23 +77,40 @@ def calculate_positions(data: BirthDetails):
             lon = res[0][0]
             sign_idx = int(lon // 30)
             sign_name = zodiac_signs[sign_idx]
-            positions.append({"name": name, "sign": sign_name, "lon": lon})
+            nak_name, charan = get_nakshatra_info(lon)
+            positions.append({
+                "name": name, 
+                "sign": sign_name, 
+                "lon": lon,
+                "nakshatra": nak_name,
+                "charan": charan
+            })
             if name == "Rahu":
                 rahu_lon = lon
 
         # Ketu
         ketu_lon = (rahu_lon + 180.0) % 360.0
         ketu_idx = int(ketu_lon // 30)
-        positions.append({"name": "Ketu", "sign": zodiac_signs[ketu_idx], "lon": ketu_lon})
+        nak_name_k, charan_k = get_nakshatra_info(ketu_lon)
+        positions.append({
+            "name": "Ketu", 
+            "sign": zodiac_signs[ketu_idx], 
+            "lon": ketu_lon,
+            "nakshatra": nak_name_k,
+            "charan": charan_k
+        })
 
         # Ascendant
         houses_res, ascmc = swe.houses_ex(jd, data.lat, data.lon, b'W', flags)
         asc_lon = ascmc[0]
         asc_idx = int(asc_lon // 30)
         ascendant = zodiac_signs[asc_idx]
+        asc_nak, asc_charan = get_nakshatra_info(asc_lon)
 
         return {
             "ascendant": ascendant,
+            "asc_nakshatra": asc_nak,
+            "asc_charan": asc_charan,
             "planets": positions
         }
     except Exception as e:
@@ -226,6 +259,47 @@ def get_local_prediction(rasi, date):
         "daily_focus": focus
     }
 
+@router.get("/search_location")
+async def search_location(q: str):
+    if not q or len(q) < 3:
+        return []
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        # Note: verify=False is used because of SSL verification issues on some local environments
+        res = requests.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"q": q, "format": "json", "limit": 5},
+            headers=headers,
+            timeout=10,
+            verify=False
+        )
+        res.raise_for_status()
+        return res.json()
+    except Exception as e:
+        print(f"Geocoding Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch location data")
+
+@router.get("/reverse_geocode")
+async def reverse_geocode(lat: float, lon: float):
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        res = requests.get(
+            "https://nominatim.openstreetmap.org/reverse",
+            params={"lat": lat, "lon": lon, "format": "json"},
+            headers=headers,
+            timeout=10,
+            verify=False
+        )
+        res.raise_for_status()
+        return res.json()
+    except Exception as e:
+        print(f"Reverse Geocoding Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch reverse location data")
+
 @router.post("/predict")
 def get_prediction(request: PredictionRequest):
     # 1. Validation
@@ -235,27 +309,23 @@ def get_prediction(request: PredictionRequest):
 
     # 2. Try API (gemini-pro)
     try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
-        
+        active_key = get_active_key()
+        if not active_key:
+            return get_local_prediction(request.rasi, request.date)
+            
         prompt = f"""
-        Act as an expert Vedic Astrologer. 
-        Generate a strictly personalized daily horoscope for the Zodiac sign '{request.rasi}' specifically for the date '{request.date}'.
+        Act as an expert Vedic Astrologer. Provide a personalized daily horoscope prediction based on:
+        Sign (Rasi): {request.rasi}
+        Nakshatra: {request.nakshatra}
+        Date: {request.date}
         
-        To ensure this is dynamic and unique:
-        1. Consider the planetary transits (Gochar) applicable on {request.date}.
-        2. Mention specific planetary influences (e.g., "Since Moon is in [Sign]...", "Sun is transiting...").
-        3. Avoid generic advice that could apply to any day.
+        Important: Use the Sign (Rasi) as the primary influencer. Provide practical, encouraging advice.
         
-        Output Format (strict JSON-like structure, do not include markdown blocks):
-        1. Rasi Prediction: A mystical yet practical 2-sentence prediction specific to this date.
-        2. Nakshatra Guidance: One sentence of specific advice.
-        3. Daily Focus: 1-2 words (e.g., "Health", "Career").
-
-        Separate them with a '|' character like this:
-        PREDICTION|GUIDANCE|FOCUS
+        Output format:
+        <Sign Prediction> | <Nakshatra/General Guidance> | <Daily Focus Keyword>
         """
-
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
+        
+        url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={active_key}"
         payload = {
             "contents": [{
                 "parts": [{"text": prompt}]
@@ -299,6 +369,203 @@ def get_prediction(request: PredictionRequest):
         print(f"Backend Exception: {e} -> Switching to Local Fallback")
         return get_local_prediction(request.rasi, request.date)
 
+@router.post("/analyze_image")
+async def analyze_image(file: UploadFile = File(...)):
+    try:
+        # Check file size (4MB limit for Gemini)
+        file_size = 0
+        contents = await file.read()
+        file_size = len(contents)
+        if file_size > 4 * 1024 * 1024:  # 4MB
+            raise HTTPException(status_code=400, detail="Image file too large. Maximum size is 4MB.")
+
+        active_key = get_active_key()
+        if not active_key:
+            raise HTTPException(status_code=500, detail="API Key missing")
+
+        base64_image = base64.b64encode(contents).decode('utf-8')
+
+        prompt = """
+        Act as an expert Vedic Astrologer. Analyze this birth chart image.
+        Extract the following information:
+        1. Ascendant (Lagna) sign and Nakshatra.
+        2. All 9 planets (Sun, Moon, Mars, Mercury, Jupiter, Venus, Saturn, Rahu, Ketu) - their Signs, Nakshatras, Charans, and Houses.
+
+        Then, provide a detailed astrological analysis covering:
+        - Personality traits
+        - Key Strengths and Challenges
+        - Life predictions (Career, Relationships, Health)
+
+        Format the entire response as a JSON object with these keys: 
+        {
+            "ascendant": "string",
+            "asc_nakshatra": "string",
+            "asc_charan": number,
+            "moon_sign": "string",
+            "planetary_details": [
+                {"planet": "...", "sign": "...", "nakshatra": "...", "charan": ..., "house": "...", "significance": "..."}
+            ],
+            "strengths": ["string", ...],
+            "challenges": ["string", ...],
+            "life_predictions": {
+                "career": "string",
+                "relationships": "string",
+                "health": "string"
+            }
+        }
+        Return ONLY valid JSON. No markdown backticks.
+        """
+
+        url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={active_key}"
+        payload = {
+            "contents": [{
+                "parts": [
+                    {"text": prompt},
+                    {
+                        "inline_data": {
+                            "mime_type": file.content_type,
+                            "data": base64_image
+                        }
+                    }
+                ]
+            }]
+        }
+        
+        headers = {'Content-Type': 'application/json'}
+        print(f"DEBUG: Sending request to {url}")
+        print(f"DEBUG: Payload parts count: {len(payload['contents'][0]['parts'])}")
+        print(f"DEBUG: API Key exists: {bool(active_key)}")
+        response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=30)
+        
+        print(f"DEBUG: Response status: {response.status_code}")
+        print(f"DEBUG: Response text: {response.text[:500]}")
+        
+        if response.status_code != 200:
+            try:
+                error_data = response.json()
+                if 'error' in error_data:
+                    error_msg = error_data['error'].get('message', str(error_data['error']))
+                else:
+                    error_msg = str(error_data)
+            except:
+                error_msg = response.text
+            
+            print(f"Gemini Vision Error: {error_msg}")
+            raise HTTPException(status_code=response.status_code, detail=f"Gemini API Error: {error_msg}")
+
+        data = response.json()
+        raw_text = data['candidates'][0]['content']['parts'][0]['text'].strip()
+        
+        # Clean potential markdown
+        if "```json" in raw_text:
+            raw_text = raw_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in raw_text:
+            raw_text = raw_text.split("```")[1].split("```")[0].strip()
+
+        try:
+            return json.loads(raw_text)
+        except json.JSONDecodeError as je:
+            print(f"JSON Parse Error: {je}")
+            print(f"Raw response: {raw_text}")
+            raise HTTPException(status_code=500, detail="AI returned invalid response format")
+
+    except Exception as e:
+        print(f"Image Analysis Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/analyze_match_images")
+async def analyze_match_images(
+    boy_chart: UploadFile = File(...), 
+    girl_chart: UploadFile = File(...),
+    boy_name: str = Form("Boy"),
+    girl_name: str = Form("Girl")
+):
+    try:
+        # Check file sizes
+        boy_contents = await boy_chart.read()
+        girl_contents = await girl_chart.read()
+        if len(boy_contents) > 4 * 1024 * 1024 or len(girl_contents) > 4 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Image files too large. Maximum size is 4MB each.")
+
+        active_key = get_active_key()
+        if not active_key:
+            raise HTTPException(status_code=500, detail="API Key missing")
+
+        boy_b64 = base64.b64encode(boy_contents).decode('utf-8')
+        girl_b64 = base64.b64encode(girl_contents).decode('utf-8')
+
+        prompt = f"""
+        Act as an expert Vedic Astrologer. Analyze these two birth chart images for matchmaking compatibility.
+        Chart 1 (Boy): {boy_name}
+        Chart 2 (Girl): {girl_name}
+
+        Compare their planetary positions, Nakshatras, and overall chart compatibility (Ashta Koota logic).
+        Provide a compatibility score out of 36, a verdict, and a detailed analysis of their relationship potential.
+
+        Format the entire response as a JSON object with these keys: 
+        {{
+            "score": number,
+            "verdict": "string",
+            "analysis": "string"
+        }}
+        Return ONLY valid JSON. No markdown backticks.
+        """
+
+        url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={active_key}"
+        payload = {
+            "contents": [{{
+                "parts": [
+                    {{"text": prompt}},
+                    {{
+                        "inline_data": {{
+                            "mime_type": boy_chart.content_type,
+                            "data": boy_b64
+                        }}
+                    }},
+                    {{
+                        "inline_data": {{
+                            "mime_type": girl_chart.content_type,
+                            "data": girl_b64
+                        }}
+                    }}
+                ]
+            }}]
+        }
+        
+        headers = {{'Content-Type': 'application/json'}}
+        response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=45)
+        
+        if response.status_code != 200:
+            try:
+                error_data = response.json()
+                if 'error' in error_data:
+                    error_msg = error_data['error'].get('message', str(error_data['error']))
+                else:
+                    error_msg = str(error_data)
+            except:
+                error_msg = response.text
+            print(f"Gemini Match Vision Error: {error_msg}")
+            raise HTTPException(status_code=response.status_code, detail=f"Gemini API Error: {error_msg}")
+
+        data = response.json()
+        raw_text = data['candidates'][0]['content']['parts'][0]['text'].strip()
+        
+        if "```json" in raw_text:
+            raw_text = raw_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in raw_text:
+            raw_text = raw_text.split("```")[1].split("```")[0].strip()
+
+        try:
+            return json.loads(raw_text)
+        except json.JSONDecodeError as je:
+            print(f"Match JSON Parse Error: {je}")
+            print(f"Raw response: {raw_text}")
+            raise HTTPException(status_code=500, detail="AI returned invalid response format")
+
+    except Exception as e:
+        print(f"Match Analysis Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/analyze_chart")
 def analyze_chart(data: BirthDetails):
     try:
@@ -313,9 +580,9 @@ def analyze_chart(data: BirthDetails):
         chart_summary = "Could not calculate exact positions."
         if chart_data:
             c_str = []
-            c_str.append(f"Ascendant: {chart_data['ascendant']}")
+            c_str.append(f"Ascendant: {chart_data['ascendant']} (Nakshatra: {chart_data['asc_nakshatra']}, Charan: {chart_data['asc_charan']})")
             for p in chart_data['planets']:
-                c_str.append(f"{p['name']} in {p['sign']} ({p['lon']:.2f}°)")
+                c_str.append(f"{p['name']} in {p['sign']} (Nakshatra: {p['nakshatra']}, Charan: {p['charan']}, Lon: {p['lon']:.2f}°)")
             chart_summary = ", ".join(c_str)
 
         # Prompt Engineering for Comprehensive Analysis
@@ -329,11 +596,11 @@ def analyze_chart(data: BirthDetails):
         {chart_summary}
 
         Based on these EXACT planetary positions, provide a detailed breakdown of their birth chart.
-        Do NOT recalculate positions yourself. INTERPRET the provided data.
+        Do NOT recalculate positions yourself. INTERPRET the provided data, especially considering the Nakshatra and Charan.
         
         The analysis should cover:
-        1. **Ascendant & Personality**: derived from {chart_data['ascendant'] if chart_data else 'calculated data'}.
-        2. **Planetary Positions**: Sun, Moon, Mars, Mercury, Jupiter, Venus, Saturn, Rahu, Ketu.
+        1. **Ascendant & Personality**: derived from {chart_data['ascendant']} ({chart_data['asc_nakshatra']}).
+        2. **Planetary Positions**: Interpretation of planets in their respective signs and Nakshatras.
         3. **Key Strengths**: Best qualities derived from the chart.
         4. **Challenges**: Areas to watch out for.
         5. **Life Overview**: Career, Relationships, Health predictions.
@@ -341,9 +608,11 @@ def analyze_chart(data: BirthDetails):
         Format the output as a JSON object with these exact keys: 
         {{
             "ascendant": "Detail string...",
+            "asc_nakshatra": "{chart_data['asc_nakshatra']}",
+            "asc_charan": {chart_data['asc_charan']},
             "moon_sign": "Detail string...",
             "planetary_details": [
-                {{"planet": "Sun", "sign": "...", "house": "...", "significance": "..."}},
+                {{"planet": "Sun", "sign": "...", "nakshatra": "...", "charan": ..., "house": "...", "significance": "..."}},
                 ...
             ],
             "strengths": ["point 1", "point 2", ...],
@@ -357,7 +626,7 @@ def analyze_chart(data: BirthDetails):
         Do not include markdown code blocks. Just the raw JSON.
         """
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={active_key}"
+        url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={active_key}"
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         headers = {'Content-Type': 'application/json'}
         
@@ -379,74 +648,4 @@ def analyze_chart(data: BirthDetails):
         print(f"Chart Analysis Error: {e} -> Switching to Local Fallback")
         return get_local_analysis(data)
 
-@router.post("/analyze_image")
-async def analyze_image(file: UploadFile = File(...), name: str = Form("User")):
-    if not GEMINI_API_KEY:
-        raise HTTPException(status_code=400, detail="Gemini API Key is required for vision analysis.")
-        
-    try:
-        # Read file and encode to base64
-        contents = await file.read()
-        encoded_string = base64.b64encode(contents).decode('utf-8')
-        mime_type = file.content_type
-
-        prompt = f"""
-        Act as an expert Vedic Astrologer. I am uploading an image/PDF of a Janma Kundli (Birth Chart) for {name}.
-        
-        Your task:
-        1. Identify the Rasi Chart (D1) in the image.
-        2. Identify the Ascendant (Lagna) and the positions of all planets: Sun, Moon, Mars, Mercury, Jupiter, Venus, Saturn, Rahu, and Ketu.
-        3. Based on these positions, provide a deep interpretation of the personality, strengths, challenges, and life overview (Career, Relationships, Health).
-        
-        If the chart is South Indian style or North Indian style, parse it accordingly.
-        
-        Format the output strictly as a JSON object:
-        {{
-            "ascendant": "Deep interpretation of the Lagna...",
-            "moon_sign": "Interpretation of the Moon Sign...",
-            "planetary_details": [
-                {{"planet": "Sun", "sign": "...", "house": "...", "significance": "..."}},
-                ... (one for each major planet)
-            ],
-            "strengths": ["...", "...", "..."],
-            "challenges": ["...", "...", "..."],
-            "life_predictions": {{
-                "career": "...",
-                "relationships": "...",
-                "health": "..."
-            }}
-        }}
-        Do not include markdown code blocks. Just the raw JSON.
-        """
-
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
-        payload = {
-            "contents": [
-                {
-                    "parts": [
-                        {"text": prompt},
-                        {"inline_data": {"mime_type": mime_type, "data": encoded_string}}
-                    ]
-                }
-            ]
-        }
-        
-        headers = {'Content-Type': 'application/json'}
-        response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=30)
-        response.raise_for_status()
-        
-        data = response.json()
-        raw_text = data['candidates'][0]['content']['parts'][0]['text']
-        
-        # Clean potential markdown
-        if "```json" in raw_text:
-            raw_text = raw_text.split("```json")[1].split("```")[0].strip()
-        elif "```" in raw_text:
-            raw_text = raw_text.split("```")[1].split("```")[0].strip()
-            
-        return json.loads(raw_text)
-
-    except Exception as e:
-        print(f"Vision Analysis Error: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to analyze chart image: {str(e)}")
 

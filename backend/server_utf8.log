@@ -1,0 +1,38 @@
+﻿python : INFO:     Will watch for changes in these directories: 
+['C:\\Users\\gnsn1\\OneDrive\\Pictures\\Clg projects\\Astronomy\\backend']
+At line:1 char:72
++ ... ictures\Clg projects\Astronomy\backend" ; python main.py 2>&1 | tee s ...
++                                               ~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (INFO:     Will ...nomy\\backend'] 
+   :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [126764] using WatchFiles
+INFO:     Started server process [46264]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+DEBUG: Sending request to https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AIzaSyBjdJCRxZOeET4jSyd7Dk0jD19Er0e48oQ
+DEBUG: Payload parts count: 2
+DEBUG: API Key exists: True
+DEBUG: Response status: 404
+DEBUG: Response text: {
+  "error": {
+    "code": 404,
+    "message": "models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+    "status": "NOT_FOUND"
+  }
+}
+
+Gemini Vision Error: {
+  "error": {
+    "code": 404,
+    "message": "models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+    "status": "NOT_FOUND"
+  }
+}
+
+Image Analysis Error: 404: Gemini API Error: models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+INFO:     127.0.0.1:60881 - "POST /api/astrology/analyze_image HTTP/1.1" 500 Internal Server Error
+WARNING:  WatchFiles detected changes in 'list_available_models.py'. 
+Reloading...

@@ -1,0 +1,60 @@
+
+--- API_KEY | models/gemini-1.5-flash ---
+Error 403: {
+  "error": {
+    "code": 403,
+    "message": "Your API key was reported as leaked. Please use another API key.",
+    "status": "PERMISSION_DENIED"
+  }
+}
+
+
+--- API_KEY | models/gemini-1.5-flash-latest ---
+Error 403: {
+  "error": {
+    "code": 403,
+    "message": "Your API key was reported as leaked. Please use another API key.",
+    "status": "PERMISSION_DENIED"
+  }
+}
+
+
+--- API_KEY | models/gemini-pro ---
+Error 403: {
+  "error": {
+    "code": 403,
+    "message": "Your API key was reported as leaked. Please use another API key.",
+    "status": "PERMISSION_DENIED"
+  }
+}
+
+
+--- ANALYSIS_KEY | models/gemini-1.5-flash ---
+Error 404: {
+  "error": {
+    "code": 404,
+    "message": "Model is not found: models/gemini-1.5-flash for api version v1beta",
+    "status": "NOT_FOUND"
+  }
+}
+
+
+--- ANALYSIS_KEY | models/gemini-1.5-flash-latest ---
+Error 404: {
+  "error": {
+    "code": 404,
+    "message": "Model is not found: models/gemini-1.5-flash-latest for api version v1beta",
+    "status": "NOT_FOUND"
+  }
+}
+
+
+--- ANALYSIS_KEY | models/gemini-pro ---
+Error 404: {
+  "error": {
+    "code": 404,
+    "message": "Model is not found: models/gemini-pro for api version v1beta",
+    "status": "NOT_FOUND"
+  }
+}
+
