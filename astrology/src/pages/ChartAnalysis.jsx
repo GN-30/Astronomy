@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import axios from "axios";
 import { AnimatePresence } from "framer-motion";
+import {motion} from "framer-motion";
 import {
   Calendar,
   Clock,
