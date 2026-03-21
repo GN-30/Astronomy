@@ -270,20 +270,54 @@ def get_panchangam(req: PanchangamRequest):
         
         # Simplified Rise/Set if rise_trans fails or for speed
         # For true Vedic, we need the rise of the limb
-        try:
-            # Using body_name=None and adding SWIEPH flag if possible
-            # Note: We use jd_day (midnight UTC) as start
-            res_rise = swe.rise_trans(jd_day, swe.SUN, None, swe.CALC_RISE | swe.BIT_DISC_CENTER, flags=swe.FLG_MOSEPH, 
-                                     geopos=(req.lon, req.lat, 0))
-            sunrise_jd = res_rise[0][0]
-            res_set = swe.rise_trans(jd_day, swe.SUN, None, swe.CALC_SET | swe.BIT_DISC_CENTER, flags=swe.FLG_MOSEPH, 
-                                    geopos=(req.lon, req.lat, 0))
-            sunset_jd = res_set[0][0]
-        except Exception as e_rise:
-            print(f"Sunrise/Set calculation error: {e_rise}")
-            # Fallback to roughly 6am/6pm local time
-            sunrise_jd = jd_day + (6 - 5.5)/24.0
-            sunset_jd = jd_day + (18 - 5.5)/24.0
+        # Precise Sunrise/Sunset Search (0.833 deg below horizon due to refraction/size)
+        # Precise Sunrise/Sunset Search using manual altitude formula
+        def find_sun_event(start_jd, target_alt_deg, is_rising):
+            current_jd = start_jd
+            step = 2.0 / (24 * 60) # 2 min steps
+            last_alt = None
+            target_alt_rad = math.radians(target_alt_deg)
+            lat_rad = math.radians(req.lat)
+            
+            for _ in range(480): # 16 hours
+                # Get Sun's RA/Dec (Equatorial)
+                res_all = swe.calc_ut(current_jd, swe.SUN, swe.FLG_MOSEPH | swe.FLG_EQUATORIAL)
+                res_equ = res_all[0]
+                ra, dec, dist = res_equ[0], res_equ[1], res_equ[2]
+                
+                # Get Sidereal Time (Greenwich)
+                gst = swe.sidtime(current_jd) # in hours
+                # Local Sidereal Time
+                lst = (gst + req.lon / 15.0) % 24
+                # Hour Angle (in degrees)
+                ha = (lst * 15.0 - ra) % 360
+                if ha > 180: ha -= 360
+                
+                # Manual Alt calculation: sin(alt) = sin(lat)sin(dec) + cos(lat)cos(dec)cos(ha)
+                dec_rad = math.radians(dec)
+                ha_rad = math.radians(ha)
+                sin_alt = math.sin(lat_rad) * math.sin(dec_rad) + math.cos(lat_rad) * math.cos(dec_rad) * math.cos(ha_rad)
+                alt_rad = math.asin(max(-1.0, min(1.0, sin_alt)))
+                alt = math.degrees(alt_rad)
+                
+                if last_alt is not None:
+                    if (is_rising and last_alt <= target_alt_deg <= alt) or \
+                       (not is_rising and last_alt >= target_alt_deg >= alt):
+                        return current_jd
+                
+                last_alt = alt
+                current_jd += step
+            return None
+
+        # Search for Sunrise: Start from midnight IST of the given day
+        jd_midnight_ist = jd_day - (5.5 / 24.0)
+        sunrise_jd = find_sun_event(jd_midnight_ist, -0.833, True)
+        if not sunrise_jd: sunrise_jd = jd_day + (6 - 5.5)/24.0
+        
+        # Search for Sunset: Start from 12 PM IST
+        jd_noon_ist = jd_midnight_ist + 0.5
+        sunset_jd = find_sun_event(jd_noon_ist, -0.833, False)
+        if not sunset_jd: sunset_jd = jd_day + (18 - 5.5)/24.0
 
         def jd_to_local_str(jd_val):
             y_f, m_f, d_f, h = swe.revjul(jd_val)
@@ -294,10 +328,8 @@ def get_panchangam(req: PanchangamRequest):
             second = int(sec_float)
             
             # Safe boundary checks for minute/second
-            if second >= 60:
-                second = 59
-            if minute >= 60:
-                minute = 59
+            if second >= 60: second = 59
+            if minute >= 60: minute = 59
                 
             dt_utc_val = pytz.UTC.localize(datetime.datetime(y, m, d, hour, minute, second))
             dt_ist_val = dt_utc_val.astimezone(ist)
@@ -328,21 +360,35 @@ def get_panchangam(req: PanchangamRequest):
         guli_start = sunrise_jd + (guli_idx - 1) * (period_len / 24.0)
         guli_end = guli_start + (period_len / 24.0)
 
-        # Nalla Neram (Auspicious Time - approximate fixed periods)
-        # Monday: 9-10.30, Tuesday: 10.30-12, Wednesday: 9-10.30, Thursday: 10.30-12, Friday: 9-10.30, Saturday: 10.30-12, Sunday: none/variable
-        # Using a more general Abhijit Muhurta (approx 48 mins around mid-day)
-        noon_jd = (sunrise_jd + sunset_jd) / 2.0
-        nalla_start = noon_jd - (24 / (24 * 60.0))
-        nalla_end = noon_jd + (24 / (24 * 60.0))
+        # Nalla Neram (Traditional Tamil Periods - 2 per day)
+        # Using a dictionary for clarity: {weekday: (start_hour, end_hour)} relative to standard 6am base
+        # but traditionally these are often offset by Sunrise. 
+        # Standard: Mon (6-7.30, 3-4.30), Tue (7.30-9, 4.30-6), Wed (9-10.30, 6-7.30), ...
+        nalla_periods = {
+            1: [(6, 7.5), (15, 16.5)], # Mon
+            2: [(7.5, 9), (16.5, 18)], # Tue
+            3: [(9, 10.5), (18, 19.5)], # Wed
+            4: [(10.5, 12), (18, 19.5)], # Thu
+            5: [(9, 10.5), (16.5, 18)], # Fri
+            6: [(7.5, 9), (16.5, 18)], # Sat
+            0: [(7.5, 9), (18, 19.5)], # Sun
+        }
+        p1, p2 = nalla_periods[weekday]
+        # Offset relative to actual sunrise? No, standard is fixed clock but we can make it better
+        nalla_start1 = sunrise_jd + (p1[0] - 6.0)/24.0
+        nalla_end1 = sunrise_jd + (p1[1] - 6.0)/24.0
+        # Check which period the user is closer to if we only show one, or combine
+        # For simple display, let's just pick one or show both
+        nalla_times = f"{jd_to_local_str(nalla_start1)} - {jd_to_local_str(nalla_end1)}"
 
         # 4. Sun and Moon positions (Sidereal)
         swe.set_sid_mode(swe.SIDM_LAHIRI)
         flags = swe.FLG_MOSEPH | swe.FLG_SIDEREAL
 
-        res_sun = swe.calc_ut(jd, swe.SUN, flags)[0]
-        res_moon = swe.calc_ut(jd, swe.MOON, flags)[0]
-        sun_lon = res_sun[0]
-        moon_lon = res_moon[0]
+        res_sun_all = swe.calc_ut(jd, swe.SUN, flags)
+        res_moon_all = swe.calc_ut(jd, swe.MOON, flags)
+        sun_lon = res_sun_all[0][0]
+        moon_lon = res_moon_all[0][0]
 
         # 5. Calculations
         # Tithi (360 / 30 = 12 deg per Tithi)
@@ -355,8 +401,10 @@ def get_panchangam(req: PanchangamRequest):
             # Check every 15 mins for 30 hours
             for _ in range(120):
                 current_jd += 0.25 / 24.0
-                s_lon = swe.calc_ut(current_jd, swe.SUN, flags)[0][0]
-                m_lon = swe.calc_ut(current_jd, swe.MOON, flags)[0][0]
+                res_s = swe.calc_ut(current_jd, swe.SUN, flags)
+                res_m = swe.calc_ut(current_jd, swe.MOON, flags)
+                s_lon = res_s[0][0]
+                m_lon = res_m[0][0]
                 
                 if calculation_type == "tithi":
                     val = (m_lon - s_lon) % 360 / 12
@@ -434,7 +482,7 @@ def get_panchangam(req: PanchangamRequest):
             "rahu_kaalam": f"{jd_to_local_str(rahu_start)} - {jd_to_local_str(rahu_end)}",
             "yama_gandam": f"{jd_to_local_str(yama_start)} - {jd_to_local_str(yama_end)}",
             "gulika_kaalam": f"{jd_to_local_str(guli_start)} - {jd_to_local_str(guli_end)}",
-            "nalla_neram": f"{jd_to_local_str(nalla_start)} - {jd_to_local_str(nalla_end)}",
+            "nalla_neram": nalla_times,
         }
 
     except Exception as e:
