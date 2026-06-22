@@ -103,17 +103,11 @@ function ChandrashtamaCard({ isOpen, onClose, birthRasiName, date }) {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           style={{ background: 'rgba(2,4,18,0.78)', backdropFilter: 'blur(7px)' }}
-          onClick={() => { if (!isDragging) onClose(); }}
+          onClick={() => onClose()}
         >
           {/* The draggable card — centered initially, then freely draggable */}
           <motion.div
             key="c8-card"
-            drag
-            dragConstraints={constraintsRef}
-            dragElastic={0.08}
-            dragMomentum={false}
-            onDragStart={() => setIsDragging(true)}
-            onDragEnd={() => setTimeout(() => setIsDragging(false), 50)}
             onClick={e => e.stopPropagation()}
             variants={cardVariants}
             initial="hidden"
@@ -132,7 +126,6 @@ function ChandrashtamaCard({ isOpen, onClose, birthRasiName, date }) {
                 ? '0 0 70px rgba(239,68,68,0.22), 0 28px 56px rgba(0,0,0,0.65)'
                 : '0 0 70px rgba(139,92,246,0.18), 0 28px 56px rgba(0,0,0,0.65)',
               userSelect: 'none',
-              cursor: isDragging ? 'grabbing' : 'grab',
             }}
           >
             {/* ── Star particles (non-interactive) ── */}
@@ -159,20 +152,7 @@ function ChandrashtamaCard({ isOpen, onClose, birthRasiName, date }) {
               className="overflow-y-auto scrollbar-hide"
               style={{ maxHeight: 'min(82vh, 620px)', cursor: 'default' }}
               onClick={e => e.stopPropagation()}
-              onPointerDown={e => {
-                // Allow drag only when initiated from the grip handle
-                if (!e.target.closest('[data-drag-handle]')) e.stopPropagation();
-              }}
             >
-              {/* Grip handle — scrolls with content, still initiates card drag */}
-              <div
-                data-drag-handle
-                className="flex justify-center pt-3 pb-1 select-none"
-                style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
-              >
-                <GripHorizontal size={18} className="text-slate-400 opacity-40" />
-              </div>
-
               {/* Header */}
               <div className="relative px-5 pt-1 pb-3">
                 <div className="flex items-center justify-between">
@@ -493,13 +473,10 @@ function ChandrashtamaDailyCard({ isOpen, onClose }) {
           className="fixed inset-0 z-50 overflow-hidden"
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
           style={{ background: 'rgba(2,4,18,0.80)', backdropFilter: 'blur(8px)' }}
-          onClick={() => { if (!isDragging) onClose(); }}
+          onClick={() => onClose()}
         >
           <motion.div
             key="cd-card"
-            drag dragConstraints={constraintsRef} dragElastic={0.07} dragMomentum={false}
-            onDragStart={() => setIsDrag(true)}
-            onDragEnd={() => setTimeout(() => setIsDrag(false), 50)}
             onClick={e => e.stopPropagation()}
             variants={cardV} initial="hidden" animate="visible" exit="exit"
             className="absolute top-1/2 left-1/2"
@@ -533,14 +510,7 @@ function ChandrashtamaDailyCard({ isOpen, onClose }) {
               className="overflow-y-auto scrollbar-hide"
               style={{ maxHeight: 'min(85vh, 640px)', cursor: 'default' }}
               onClick={e => e.stopPropagation()}
-              onPointerDown={e => { if (!e.target.closest('[data-drag-handle]')) e.stopPropagation(); }}
             >
-              {/* Grip */}
-              <div data-drag-handle className="flex justify-center pt-3 pb-1 select-none"
-                style={{ cursor: isDragging ? 'grabbing' : 'grab' }}>
-                <GripHorizontal size={18} className="text-slate-400 opacity-40" />
-              </div>
-
               {/* Header */}
               <div className="relative px-5 pt-1 pb-3">
                 <div className="flex items-center justify-between">
